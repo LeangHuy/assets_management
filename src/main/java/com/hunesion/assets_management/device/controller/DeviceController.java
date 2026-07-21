@@ -45,7 +45,11 @@ public class DeviceController {
     }
 
     @PostMapping
-    @Operation(summary = "Create device", description = "Creates a new device. MAC address must be unique when provided.")
+    @Operation(
+            summary = "Create device",
+            description = "Creates a new device when an ACTIVE license allows it. "
+                    + "Upload and activate a .lic file first if no license is present."
+    )
     public ResponseEntity<ApiResponse<DeviceResponse>> create(@Valid @RequestBody DeviceCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Device created successfully", deviceService.create(request)));

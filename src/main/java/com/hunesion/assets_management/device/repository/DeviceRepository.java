@@ -3,7 +3,6 @@ package com.hunesion.assets_management.device.repository;
 import com.hunesion.assets_management.device.dto.DeviceResponse;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -19,6 +18,9 @@ public interface DeviceRepository {
             ORDER BY created_at DESC
             """)
     List<DeviceResponse> findAll();
+
+    @Select("SELECT COUNT(*) FROM device")
+    long count();
 
     @Select("""
             SELECT id, name, ip_address, mac_address, status, created_at, updated_at
@@ -50,8 +52,10 @@ public interface DeviceRepository {
             INSERT INTO device (name, ip_address, mac_address, status)
             VALUES (#{name}, #{ipAddress}, #{macAddress}, #{status})
             """)
-    @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(DeviceResponse device);
+
+    @Select("SELECT LAST_INSERT_ID()")
+    Long lastInsertId();
 
     @Update("""
             UPDATE device

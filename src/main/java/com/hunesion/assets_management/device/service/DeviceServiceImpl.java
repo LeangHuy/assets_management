@@ -5,6 +5,7 @@ import com.hunesion.assets_management.device.dto.DeviceCreateRequest;
 import com.hunesion.assets_management.device.dto.DevicePatchRequest;
 import com.hunesion.assets_management.device.dto.DeviceResponse;
 import com.hunesion.assets_management.device.repository.DeviceRepository;
+import com.hunesion.assets_management.license.service.LicenseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ public class DeviceServiceImpl implements DeviceService {
     private static final String DEFAULT_STATUS = "ACTIVE";
 
     private final DeviceRepository deviceRepository;
+    private final LicenseService licenseService;
 
     @Override
     @Transactional(readOnly = true)
@@ -40,6 +42,8 @@ public class DeviceServiceImpl implements DeviceService {
     @Override
     @Transactional
     public DeviceResponse create(DeviceCreateRequest request) {
+        licenseService.assertCanCreateDevice();
+
         String macAddress = normalizeMacAddress(request.macAddress());
         if (macAddress != null && deviceRepository.existsByMacAddress(macAddress)) {
             throw new ApiException(HttpStatus.CONFLICT, "MAC address already exists: " + macAddress);
@@ -56,7 +60,7 @@ public class DeviceServiceImpl implements DeviceService {
         );
 
         deviceRepository.insert(device);
-        return deviceRepository.findById(device.id());
+        return deviceRepository.findById(deviceRepository.lastInsertId());
     }
 
     @Override
