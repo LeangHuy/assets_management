@@ -65,10 +65,13 @@ public class LicenseServiceImpl implements LicenseService {
             throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
         }
 
-        long deviceCount = deviceRepository.count();
+//        long deviceCount = deviceRepository.countByStatus(DeviceStatus.ACTIVE);
+        long deviceCount = deviceRepository.countAllDevice();
         if (deviceCount >= info.deviceLimit()) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Device limit reached (" + info.deviceLimit() + "). Cannot register more devices");
+                    "Device limit reached (" + info.deviceLimit()
+                            + "). Active and Recycle Bin devices both count toward the license. "
+                            + "Cannot register more devices");
         }
     }
 

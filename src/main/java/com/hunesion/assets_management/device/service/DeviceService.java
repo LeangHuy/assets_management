@@ -15,4 +15,8 @@ public interface DeviceService {
     DeviceResponse create(DeviceCreateRequest request);
 
     DeviceResponse patch(Long deviceId, DevicePatchRequest request);
+
+    void delete(Long deviceId);
+
+    DeviceResponse recover(Long deviceId);
 }

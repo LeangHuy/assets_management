@@ -1,6 +1,7 @@
 package com.hunesion.assets_management.device.service;
 
 import com.hunesion.assets_management.common.exception.ApiException;
+import com.hunesion.assets_management.device.domain.DeviceStatus;
 import com.hunesion.assets_management.device.dto.DeviceCreateRequest;
 import com.hunesion.assets_management.device.dto.DevicePatchRequest;
 import com.hunesion.assets_management.device.dto.DeviceResponse;
@@ -18,8 +19,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DeviceServiceImpl implements DeviceService {
 
-    private static final String DEFAULT_STATUS = "ACTIVE";
-
     private final DeviceRepository deviceRepository;
     private final LicenseService licenseService;
 
@@ -32,11 +31,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Override
     @Transactional(readOnly = true)
     public DeviceResponse findById(Long deviceId) {
-        DeviceResponse device = deviceRepository.findById(deviceId);
-        if (device == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Device not found: " + deviceId);
-        }
-        return device;
+        return requireDevice(deviceId);
     }
 
     @Override
@@ -44,17 +39,11 @@ public class DeviceServiceImpl implements DeviceService {
     public DeviceResponse create(DeviceCreateRequest request) {
         licenseService.assertCanCreateDevice();
 
-        String macAddress = normalizeMacAddress(request.macAddress());
-        if (macAddress != null && deviceRepository.existsByMacAddress(macAddress)) {
-            throw new ApiException(HttpStatus.CONFLICT, "MAC address already exists: " + macAddress);
-        }
-
         DeviceResponse device = new DeviceResponse(
                 null,
                 request.name().trim(),
                 normalizeOptional(request.ipAddress()),
-                macAddress,
-                resolveStatus(request.status()),
+                DeviceStatus.ACTIVE,
                 null,
                 null
         );
@@ -68,37 +57,21 @@ public class DeviceServiceImpl implements DeviceService {
     public DeviceResponse patch(Long deviceId, DevicePatchRequest request) {
         if (!hasPatchFields(request)) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "At least one of name, ipAddress, macAddress, or status must be provided");
+                    "At least one of name or ipAddress must be provided");
         }
 
-        DeviceResponse existing = deviceRepository.findById(deviceId);
-        if (existing == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Device not found: " + deviceId);
-        }
+        DeviceResponse existing = requireDevice(deviceId);
 
         String name = StringUtils.hasText(request.name()) ? request.name().trim() : existing.name();
         String ipAddress = request.ipAddress() != null
                 ? normalizeOptional(request.ipAddress())
                 : existing.ipAddress();
 
-        String macAddress = existing.macAddress();
-        if (request.macAddress() != null) {
-            macAddress = normalizeMacAddress(request.macAddress());
-            if (macAddress != null
-                    && !macAddress.equals(existing.macAddress())
-                    && deviceRepository.existsByMacAddressAndIdNot(macAddress, existing.id())) {
-                throw new ApiException(HttpStatus.CONFLICT, "MAC address already exists: " + macAddress);
-            }
-        }
-
-        String status = StringUtils.hasText(request.status()) ? request.status().trim() : existing.status();
-
         DeviceResponse updated = new DeviceResponse(
                 existing.id(),
                 name,
                 ipAddress,
-                macAddress,
-                status,
+                existing.status(),
                 existing.createdAt(),
                 existing.updatedAt()
         );
@@ -107,22 +80,42 @@ public class DeviceServiceImpl implements DeviceService {
         return deviceRepository.findById(deviceId);
     }
 
-    private static boolean hasPatchFields(DevicePatchRequest request) {
-        return StringUtils.hasText(request.name())
-                || request.ipAddress() != null
-                || request.macAddress() != null
-                || StringUtils.hasText(request.status());
+    @Override
+    @Transactional
+    public void delete(Long deviceId) {
+        DeviceResponse existing = requireDevice(deviceId);
+        if (DeviceStatus.INACTIVE.equals(existing.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Device is already inactive: " + deviceId);
+        }
+        deviceRepository.updateStatus(deviceId, DeviceStatus.INACTIVE);
     }
 
-    private static String resolveStatus(String status) {
-        return StringUtils.hasText(status) ? status.trim() : DEFAULT_STATUS;
+    @Override
+    @Transactional
+    public DeviceResponse recover(Long deviceId) {
+        DeviceResponse existing = requireDevice(deviceId);
+        if (DeviceStatus.ACTIVE.equals(existing.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Device is already active: " + deviceId);
+        }
+
+//        licenseService.assertCanCreateDevice();
+        deviceRepository.updateStatus(deviceId, DeviceStatus.ACTIVE);
+        return deviceRepository.findById(deviceId);
+    }
+
+    private DeviceResponse requireDevice(Long deviceId) {
+        DeviceResponse device = deviceRepository.findById(deviceId);
+        if (device == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Device not found: " + deviceId);
+        }
+        return device;
+    }
+
+    private static boolean hasPatchFields(DevicePatchRequest request) {
+        return StringUtils.hasText(request.name()) || request.ipAddress() != null;
     }
 
     private static String normalizeOptional(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
-    private static String normalizeMacAddress(String macAddress) {
-        return StringUtils.hasText(macAddress) ? macAddress.trim() : null;
     }
 }

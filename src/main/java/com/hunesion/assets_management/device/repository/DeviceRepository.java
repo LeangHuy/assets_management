@@ -13,44 +13,28 @@ import java.util.List;
 public interface DeviceRepository {
 
     @Select("""
-            SELECT id, name, ip_address, mac_address, status, created_at, updated_at
+            SELECT id, name, ip_address, status, created_at, updated_at
             FROM device
             ORDER BY created_at DESC
             """)
     List<DeviceResponse> findAll();
 
+    @Select("SELECT COUNT(*) FROM device WHERE status = #{status}")
+    long countByStatus(@Param("status") String status);
+
     @Select("SELECT COUNT(*) FROM device")
-    long count();
+    long countAllDevice();
 
     @Select("""
-            SELECT id, name, ip_address, mac_address, status, created_at, updated_at
+            SELECT id, name, ip_address, status, created_at, updated_at
             FROM device
             WHERE id = #{id}
             """)
     DeviceResponse findById(@Param("id") Long id);
 
-    @Select("""
-            SELECT EXISTS(
-                SELECT 1
-                FROM device
-                WHERE mac_address = #{macAddress}
-            )
-            """)
-    boolean existsByMacAddress(@Param("macAddress") String macAddress);
-
-    @Select("""
-            SELECT EXISTS(
-                SELECT 1
-                FROM device
-                WHERE mac_address = #{macAddress}
-                  AND id <> #{id}
-            )
-            """)
-    boolean existsByMacAddressAndIdNot(@Param("macAddress") String macAddress, @Param("id") Long id);
-
     @Insert("""
-            INSERT INTO device (name, ip_address, mac_address, status)
-            VALUES (#{name}, #{ipAddress}, #{macAddress}, #{status})
+            INSERT INTO device (name, ip_address, status)
+            VALUES (#{name}, #{ipAddress}, #{status})
             """)
     int insert(DeviceResponse device);
 
@@ -61,9 +45,15 @@ public interface DeviceRepository {
             UPDATE device
             SET name = #{name},
                 ip_address = #{ipAddress},
-                mac_address = #{macAddress},
                 status = #{status}
             WHERE id = #{id}
             """)
     int update(DeviceResponse device);
+
+    @Update("""
+            UPDATE device
+            SET status = #{status}
+            WHERE id = #{id}
+            """)
+    int updateStatus(@Param("id") Long id, @Param("status") String status);
 }

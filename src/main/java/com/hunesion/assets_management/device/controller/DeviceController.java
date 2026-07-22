@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,7 +48,7 @@ public class DeviceController {
     @PostMapping
     @Operation(
             summary = "Create device",
-            description = "Creates a new device when an ACTIVE license allows it. "
+            description = "Creates a new ACTIVE device when an ACTIVE license allows it. "
                     + "Upload and activate a .lic file first if no license is present."
     )
     public ResponseEntity<ApiResponse<DeviceResponse>> create(@Valid @RequestBody DeviceCreateRequest request) {
@@ -62,5 +63,28 @@ public class DeviceController {
             @PathVariable Long deviceId,
             @Valid @RequestBody DevicePatchRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Device updated successfully", deviceService.patch(deviceId, request)));
+    }
+
+    @DeleteMapping("/{deviceId}")
+    @Operation(
+            summary = "Deactivate device",
+            description = "Soft-deletes a device by setting status to INACTIVE. Use recover to restore it."
+    )
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @Parameter(description = "Device ID", required = true)
+            @PathVariable Long deviceId) {
+        deviceService.delete(deviceId);
+        return ResponseEntity.ok(ApiResponse.ok("Device deactivated successfully", null));
+    }
+
+    @PostMapping("/{deviceId}/recover")
+    @Operation(
+            summary = "Recover device",
+            description = "Restores an INACTIVE device to ACTIVE. Recycle Bin devices already count toward the license limit."
+    )
+    public ResponseEntity<ApiResponse<DeviceResponse>> recover(
+            @Parameter(description = "Device ID", required = true)
+            @PathVariable Long deviceId) {
+        return ResponseEntity.ok(ApiResponse.ok("Device recovered successfully", deviceService.recover(deviceId)));
     }
 }
