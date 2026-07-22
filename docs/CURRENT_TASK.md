@@ -1,22 +1,17 @@
 # Current Task
 
-## Task: Device status + recovery
+## Task: Signing config — public key only
 
 ### Goal
 
-- Restore device `status` (`ACTIVE` / `INACTIVE`).
-- Soft-delete on `DELETE` (set `INACTIVE`).
-- Add `POST /api/v1/devices/{id}/recover` to restore `ACTIVE` under the license limit.
-- Count **all** devices (active + Recycle Bin) toward the license device limit.
+- Remove unused `license.signing.key-id`.
+- Keep only `license.signing.public-key` / `LICENSE_SIGNING_PUBLIC_KEY` for Ed25519 verification.
 
 ### Implementation result (2026-07-22)
 
-- **Status:** column restored in `shcema.sql`; `migration_v3_device_status.sql`
-- **Delete:** soft-deactivate via `updateStatus(INACTIVE)`
-- **Recover:** `DeviceController` / `DeviceService.recover` (no seat check; row already counted)
-- **License:** `countAllDevice()` in `assertCanCreateDevice`
+- Removed `key-id` from `application.yml`, `SigningKeyProperties`, and `PublicKeyProvider`.
+- License payload still carries `keyId` from the issuer; API responses use that.
 
 ### Verification
 
-- `./gradlew compileJava` — pass
-- Apply `migration_v3_device_status.sql` on DBs missing the `status` column
+- `./gradlew compileJava`

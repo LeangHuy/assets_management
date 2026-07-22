@@ -39,3 +39,6 @@ out/
 ### Runtime license file ###
 data/license/
 build/test-license/
+
+### IntelliJ IDEA ###
+.env.properties
