@@ -26,8 +26,13 @@ public class LicensePayloadValidator {
         if (!ALLOWED_TYPES.contains(payload.licenseType())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid licenseType: " + payload.licenseType());
         }
-        if (payload.limits().devices() < 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "deviceLimit must be >= 0");
+        if (payload.limits() == null || payload.limits().isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "limits must not be empty");
+        }
+        for (var entry : payload.limits().entrySet()) {
+            if (entry.getValue() == null || entry.getValue() < 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "limits." + entry.getKey() + " must be >= 0");
+            }
         }
         if (payload.expiresAt().isBefore(LocalDate.now(clock))) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "License has expired");

@@ -1,10 +1,15 @@
 package com.hunesion.assets_management.license.crypto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 @JsonPropertyOrder({
         "version",
@@ -17,6 +22,7 @@ import java.util.Objects;
         "issuedAt",
         "expiresAt",
         "limits",
+        "features",
         "keyId"
 })
 public record LicensePayload(
@@ -29,7 +35,8 @@ public record LicensePayload(
         String licenseType,
         Instant issuedAt,
         LocalDate expiresAt,
-        Limits limits,
+        Map<String, Integer> limits,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> features,
         String keyId
 ) {
 
@@ -46,14 +53,12 @@ public record LicensePayload(
         Objects.requireNonNull(expiresAt, "expiresAt");
         Objects.requireNonNull(limits, "limits");
         Objects.requireNonNull(keyId, "keyId");
+        limits = Collections.unmodifiableSortedMap(new TreeMap<>(limits));
+        features = features == null ? List.of() : List.copyOf(features);
     }
 
-    @JsonPropertyOrder({"devices"})
-    public record Limits(int devices) {
-        public Limits {
-            if (devices < 0) {
-                throw new IllegalArgumentException("devices must be >= 0");
-            }
-        }
+    public int devices() {
+        Integer value = limits.get("devices");
+        return value == null ? 0 : value;
     }
 }
