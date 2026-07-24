@@ -1,6 +1,7 @@
 package com.hunesion.assets_management.common.exception;
 
 import com.hunesion.assets_management.common.dto.ApiResponse;
+import com.hunesion.license.runtime.exception.LicenseException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -14,6 +15,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiResponse<Void>> handleApiException(ApiException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(ex.getMessage()));
+    }
+
+    @ExceptionHandler(LicenseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLicenseException(LicenseException ex) {
         return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(ex.getMessage()));
     }
 

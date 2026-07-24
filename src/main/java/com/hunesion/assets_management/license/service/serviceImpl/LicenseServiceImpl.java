@@ -2,14 +2,15 @@ package com.hunesion.assets_management.license.service.serviceImpl;
 
 import com.hunesion.assets_management.common.exception.ApiException;
 import com.hunesion.assets_management.device.repository.DeviceRepository;
-import com.hunesion.assets_management.license.crypto.LicensePayload;
-import com.hunesion.assets_management.license.crypto.LicensePayloadValidator;
-import com.hunesion.assets_management.license.crypto.SignedLicenseVerifier;
-import com.hunesion.assets_management.license.domain.LicenseRuntimeStatus;
 import com.hunesion.assets_management.license.dto.LicenseInfoResponse;
 import com.hunesion.assets_management.license.service.LicenseService;
-import com.hunesion.assets_management.license.storage.LicenseFileStore;
-import com.hunesion.assets_management.license.support.LicenseFileReader;
+import com.hunesion.license.runtime.crypto.LicensePayload;
+import com.hunesion.license.runtime.crypto.LicensePayloadValidator;
+import com.hunesion.license.runtime.crypto.SignedLicenseVerifier;
+import com.hunesion.license.runtime.domain.LicenseRuntimeStatus;
+import com.hunesion.license.runtime.exception.LicenseException;
+import com.hunesion.license.runtime.storage.LicenseFileStore;
+import com.hunesion.license.runtime.support.LicenseFileReader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -65,7 +66,6 @@ public class LicenseServiceImpl implements LicenseService {
             throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
         }
 
-//        long deviceCount = deviceRepository.countByStatus(DeviceStatus.ACTIVE);
         long deviceCount = deviceRepository.countAllDevice();
         if (deviceCount >= info.deviceLimit()) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -79,10 +79,18 @@ public class LicenseServiceImpl implements LicenseService {
         SignedLicenseVerifier.VerifiedLicense verified = signedLicenseVerifier.verify(licenseKey);
         LicensePayload payload = verified.payload();
         payloadValidator.validateForActivation(payload);
+        requireDevicesLimit(payload);
 
         licenseFileStore.write(verified.licenseKey());
 
         return toResponse(verified, LicenseRuntimeStatus.ACTIVE);
+    }
+
+    private void requireDevicesLimit(LicensePayload payload) {
+        Integer devices = payload.limits().get("devices");
+        if (devices == null) {
+            throw new LicenseException(HttpStatus.BAD_REQUEST, "limits.devices is required for asset management");
+        }
     }
 
     /**
@@ -97,14 +105,14 @@ public class LicenseServiceImpl implements LicenseService {
         String licenseKey;
         try {
             licenseKey = licenseFileStore.read();
-        } catch (ApiException ex) {
+        } catch (LicenseException ex) {
             return ResolvedLicense.missing();
         }
 
         SignedLicenseVerifier.VerifiedLicense verified;
         try {
             verified = signedLicenseVerifier.verify(licenseKey);
-        } catch (ApiException ex) {
+        } catch (LicenseException ex) {
             return ResolvedLicense.invalid();
         }
 
