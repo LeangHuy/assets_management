@@ -67,9 +67,9 @@ public class LicenseServiceImpl implements LicenseService {
         }
 
         long deviceCount = deviceRepository.countAllDevice();
-        if (deviceCount >= info.deviceLimit()) {
+        if (deviceCount >= info.limits().get("devices_limit")) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Device limit reached (" + info.deviceLimit()
+                    "Device limit reached (" + info.limits().get("devices_limit")
                             + "). Active and Recycle Bin devices both count toward the license. "
                             + "Cannot register more devices");
         }
@@ -87,7 +87,7 @@ public class LicenseServiceImpl implements LicenseService {
     }
 
     private void requireDevicesLimit(LicensePayload payload) {
-        Integer devices = payload.limits().get("devices");
+        Integer devices = payload.limits().get("devices_limit");
         if (devices == null) {
             throw new LicenseException(HttpStatus.BAD_REQUEST, "limits.devices is required for asset management");
         }
@@ -138,14 +138,12 @@ public class LicenseServiceImpl implements LicenseService {
                 verified.licenseKey(),
                 payload.licenseType(),
                 payload.expiresAt(),
-                payload.devices(),
                 payload.limits(),
-                payload.features(),
                 payload.keyId(),
                 sha256Hex(verified.payloadBytes()),
                 null,
                 false,
-                null
+                payload.issuedAt()
         );
     }
 
@@ -186,8 +184,6 @@ public class LicenseServiceImpl implements LicenseService {
                 return new LicenseInfoResponse(
                         true,
                         status,
-                        null,
-                        null,
                         null,
                         null,
                         null,
