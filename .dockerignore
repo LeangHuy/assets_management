@@ -1,0 +1,13 @@
+.git
+.gradle
+.idea
+build
+data
+docs
+*.md
+.env.properties
+.env.docker
+docker/certs/*.crt
+docker/certs/*.key
+HELP.md
+**/.DS_Store

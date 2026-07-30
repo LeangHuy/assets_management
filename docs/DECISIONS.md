@@ -31,12 +31,11 @@
 
 - Status: Accepted
 - Context: The full license diagram includes an activation request to the issuer and a signed activation certificate. Network access from customer servers to the issuer may be unavailable.
-- Decision: Do not add an online `ActivationRegistryClient`. Use offline file export/import. Phase A local fingerprint binding is followed by engineer-triggered export of `official-license-request.json` (`POST /api/v1/license/official-request`) for upload to the internal License Management System.
+- Decision: Do not add an online `ActivationRegistryClient` in Phase A. When issuer binding is added later, use offline file export/import only.
 - Rationale: Aligns with air-gapped customer deployments and avoids coupling activate to issuer availability.
-- Consequences: Same `.lic` can still be activated on multiple servers until the issuer consumes the offline request and issues a bound official license. Issuer upload/approve of the JSON remains a separate task.
+- Consequences: Phase A cannot prevent the same `.lic` from being activated on two servers that never sync with the issuer; that gap is accepted until offline issuer binding ships.
 - Date: 2026-07-30
-- Updated: 2026-07-30 — added official-license-request.json export.
-- Updated: 2026-07-30 — export shape aligned to issuer activation request (`formatVersion`, `requestId`, nested `demoLicense` / `installation` with `fingerprintComputedAt`; no customer/product/claims).
+
 ## ADR-005: Compose stack with nginx HTTPS on port 9005
 
 - Status: Accepted

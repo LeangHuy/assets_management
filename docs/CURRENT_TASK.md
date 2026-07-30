@@ -6,39 +6,29 @@ Completed
 
 ## Objective
 
-Align `official-license-request.json` export with the issuer activation-request schema used by `license-key-format` / `license-key-ui`.
+Consolidate the full Docker stack into a single sibling folder `assets-management-docker` that includes compose, nginx, certs, env, and Dockerfiles for UI + backend.
 
 ## Context
 
-The issuer expects nested `formatVersion`, `requestId`, `demoLicense`, and `installation` (with `fingerprintComputedAt`). Assets management still exported a flat `version` / `requestType` shape, so uploads failed client validation.
+Ops files were previously mixed into `assets_management`. Operator wants one folder that contains everything needed to run HTTPS on port 9005.
 
 ## Requirements
 
-1. Change `OfficialLicenseRequest` to the nested issuer schema.
-2. Generate a new UUID `requestId` per export.
-3. Include `fingerprintComputedAt` from `FingerprintMeta.computedAt`.
-4. Do not embed customer/product/expiry/claims for the issuer to trust.
-5. `./gradlew compileJava` must succeed.
+1. Create `assets-management-docker/` next to both app repos.
+2. Move compose, nginx, MariaDB init, certs, env template into that folder.
+3. Include backend/ui Dockerfiles in that folder; build contexts stay on sibling source repos.
+4. Remove compose/nginx/certs clutter from `assets_management`.
+5. Document run steps in the new folder README.
 
 ## Out of scope
 
-- Issuer or license-key-ui changes
-- Online activation registry
+- Filling production secrets in `.env.docker`
+- CA-signed certificates
 
 ## Acceptance criteria
 
-- Downloaded JSON validates against the issuer activation-request schema.
-- File still named `official-license-request.json`.
-
-## Relevant files
-
-- `license/dto/OfficialLicenseRequest.java`
-- `license/service/serviceImpl/LicenseServiceImpl.java`
-- `license/fingerprint/OfficialLicenseRequestStore.java`
-
-## Risks and constraints
-
-- Existing on-disk request JSON files are the old flat shape and must be regenerated.
+- Operator can `cd assets-management-docker && docker compose --env-file .env.docker up -d --build`
+- Sibling `assets_management` and `assets-management-ui` are used as build contexts
 
 ## Implementation result
 
@@ -48,22 +38,19 @@ Completed on 2026-07-30.
 
 ### Files changed
 
-- `OfficialLicenseRequest.java` — nested `formatVersion` / `requestId` / `demoLicense` / `installation`
-- `LicenseServiceImpl.java` — builds new shape; UUID `requestId`; `fingerprintComputedAt` from binding
-- `OfficialLicenseRequestStore.java` — log fields updated
-- `docs/DECISIONS.md` — ADR-004 updated
-- `docs/CURRENT_TASK.md` / `docs/WORK_REPORT.md`
+- Created `../assets-management-docker/` with full stack
+- Removed `docker-compose.yml`, `docker/`, `.env.docker*` from this repo
+- Updated `docs/ARCHITECTURE.md` and ADR-005 to point at the deploy folder
+- App `Dockerfile` / `.dockerignore` kept here for source-context builds
 
 ### Verification
 
-- `./gradlew compileJava` — Passed
-- `./gradlew test` — Passed (no test sources)
+- `docker compose ... config --services` from new folder — Passed (`db`, `ui`, `backend`, `nginx`)
 
 ### Known limitations
 
-- Existing flat `official-license-request.json` files on disk must be regenerated via the Generate Official License Request action.
-- Old `fingerprint.meta` without `computedAt` still requires re-activation.
+- `.env.docker` must still set `LICENSE_SIGNING_PUBLIC_KEY` before backend stays healthy
 
 ### Remaining work
 
-- None for this alignment task.
+- Operator configures `.env.docker` and starts the stack from the new folder
