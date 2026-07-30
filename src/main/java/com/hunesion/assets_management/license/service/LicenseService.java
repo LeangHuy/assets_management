@@ -10,4 +10,10 @@ public interface LicenseService {
     LicenseInfoResponse status();
 
     void assertCanCreateDevice();
+
+    /**
+     * Builds {@code official-license-request.json} from the active bound demo license
+     * and returns the file bytes for download.
+     */
+    byte[] generateOfficialLicenseRequest();
 }

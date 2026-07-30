@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,5 +45,19 @@ public class LicenseController {
             @RequestPart("file") MultipartFile file) {
         return ResponseEntity.ok(
                 ApiResponse.ok("License activated successfully", licenseService.activateFromFile(file)));
+    }
+
+    @PostMapping("/official-request")
+    @Operation(
+            summary = "Generate official license request file",
+            description = "Builds official-license-request.json from the active TEMPORARY (demo) license, "
+                    + "installation id, and server fingerprint for offline upload to the License Management System."
+    )
+    public ResponseEntity<byte[]> generateOfficialLicenseRequest() {
+        byte[] body = licenseService.generateOfficialLicenseRequest();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"official-license-request.json\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
     }
 }

@@ -3,6 +3,13 @@ package com.hunesion.assets_management.license.service.serviceImpl;
 import com.hunesion.assets_management.common.exception.ApiException;
 import com.hunesion.assets_management.device.repository.DeviceRepository;
 import com.hunesion.assets_management.license.dto.LicenseInfoResponse;
+import com.hunesion.assets_management.license.dto.OfficialLicenseRequest;
+import com.hunesion.assets_management.license.fingerprint.FingerprintMeta;
+import com.hunesion.assets_management.license.fingerprint.InstallationMeta;
+import com.hunesion.assets_management.license.fingerprint.LicenseBindingStore;
+import com.hunesion.assets_management.license.fingerprint.OfficialLicenseRequestStore;
+import com.hunesion.assets_management.license.fingerprint.ServerFingerprintProvider;
+import com.hunesion.assets_management.license.fingerprint.ServerIdentityStore;
 import com.hunesion.assets_management.license.service.LicenseService;
 import com.hunesion.license.runtime.crypto.LicensePayload;
 import com.hunesion.license.runtime.crypto.LicensePayloadValidator;
@@ -19,8 +26,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.security.MessageDigest;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HexFormat;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +41,10 @@ public class LicenseServiceImpl implements LicenseService {
     private final LicenseFileStore licenseFileStore;
     private final DeviceRepository deviceRepository;
     private final LicenseFileReader licenseFileReader;
+    private final ServerIdentityStore serverIdentityStore;
+    private final LicenseBindingStore licenseBindingStore;
+    private final OfficialLicenseRequestStore officialLicenseRequestStore;
+    private final ServerFingerprintProvider serverFingerprintProvider;
     private final Clock clock;
 
     @Override
@@ -62,6 +76,10 @@ public class LicenseServiceImpl implements LicenseService {
         if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
         }
+        if (LicenseRuntimeStatus.BINDING_INVALID.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License binding is invalid for this server. Re-activate the .lic file on this host");
+        }
         if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
         }
@@ -75,15 +93,83 @@ public class LicenseServiceImpl implements LicenseService {
         }
     }
 
+    @Override
+    @Transactional
+    public byte[] generateOfficialLicenseRequest() {
+        ResolvedLicense resolved = resolveLicense();
+        LicenseInfoResponse info = resolved.toResponse();
+
+        if (!info.present() || resolved.verified() == null) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "No active license. Activate a demo .lic file before generating an official license request");
+        }
+        if (LicenseRuntimeStatus.INVALID.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License file is invalid or has been tampered with");
+        }
+        if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
+        }
+        if (LicenseRuntimeStatus.BINDING_INVALID.equals(info.status()) || !info.serverBound()) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License binding is invalid for this server. Re-activate the .lic file before generating a request");
+        }
+        if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
+        }
+
+        LicensePayload payload = resolved.verified().payload();
+        if (!"TEMPORARY".equalsIgnoreCase(payload.licenseType())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Official license request can only be generated from an active TEMPORARY (demo) license");
+        }
+
+        InstallationMeta identity = serverIdentityStore.read()
+                .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN,
+                        "installation.meta is missing. Re-activate the demo license"));
+        FingerprintMeta binding = licenseBindingStore.read()
+                .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN,
+                        "fingerprint.meta is missing. Re-activate the demo license"));
+
+        OfficialLicenseRequest request = new OfficialLicenseRequest(
+                OfficialLicenseRequest.CURRENT_FORMAT_VERSION,
+                UUID.randomUUID().toString(),
+                new OfficialLicenseRequest.DemoLicense(
+                        payload.licenseId(),
+                        payload.licenseNumber(),
+                        binding.payloadHash()
+                ),
+                new OfficialLicenseRequest.Installation(
+                        identity.installationId(),
+                        binding.serverFingerprint(),
+                        binding.fingerprintVersion(),
+                        binding.computedAt()
+                ),
+                Instant.now(clock)
+        );
+
+        return officialLicenseRequestStore.write(request);
+    }
+
     private LicenseInfoResponse activateLicenseKey(String licenseKey) {
         SignedLicenseVerifier.VerifiedLicense verified = signedLicenseVerifier.verify(licenseKey);
         LicensePayload payload = verified.payload();
         payloadValidator.validateForActivation(payload);
         requireDevicesLimit(payload);
 
-        licenseFileStore.write(verified.licenseKey());
+        InstallationMeta identity = serverIdentityStore.ensurePresent();
+        String fingerprint = serverFingerprintProvider.compute(identity.installationId());
+        String payloadHash = sha256Hex(verified.payloadBytes());
 
-        return toResponse(verified, LicenseRuntimeStatus.ACTIVE);
+        licenseFileStore.write(verified.licenseKey());
+        licenseBindingStore.write(new FingerprintMeta(
+                fingerprint,
+                ServerFingerprintProvider.FINGERPRINT_VERSION,
+                Instant.now(clock),
+                payloadHash
+        ));
+
+        return toResponse(verified, LicenseRuntimeStatus.ACTIVE, fingerprint, true);
     }
 
     private void requireDevicesLimit(LicensePayload payload) {
@@ -95,7 +181,7 @@ public class LicenseServiceImpl implements LicenseService {
 
     /**
      * Always reads the on-disk license file and re-verifies the Ed25519 signature before
-     * returning limits or expiry.
+     * returning limits or expiry. Also recomputes the server fingerprint against the bound hash.
      */
     private ResolvedLicense resolveLicense() {
         if (!licenseFileStore.exists()) {
@@ -116,8 +202,25 @@ public class LicenseServiceImpl implements LicenseService {
             return ResolvedLicense.invalid();
         }
 
+        Optional<FingerprintMeta> binding = licenseBindingStore.read();
+        InstallationMeta identity = serverIdentityStore.read()
+                .orElseGet(serverIdentityStore::ensurePresent);
+        String currentFingerprint = serverFingerprintProvider.compute(identity.installationId());
+
+        if (binding.isEmpty()
+                || binding.get().serverFingerprint() == null
+                || binding.get().serverFingerprint().isBlank()
+                || !binding.get().serverFingerprint().equals(currentFingerprint)) {
+            return ResolvedLicense.present(
+                    verified,
+                    LicenseRuntimeStatus.BINDING_INVALID,
+                    currentFingerprint,
+                    false
+            );
+        }
+
         String status = resolveStatus(verified.payload());
-        return ResolvedLicense.present(verified, status);
+        return ResolvedLicense.present(verified, status, currentFingerprint, true);
     }
 
     private String resolveStatus(LicensePayload payload) {
@@ -129,7 +232,9 @@ public class LicenseServiceImpl implements LicenseService {
 
     private static LicenseInfoResponse toResponse(
             SignedLicenseVerifier.VerifiedLicense verified,
-            String status
+            String status,
+            String serverFingerprint,
+            boolean serverBound
     ) {
         LicensePayload payload = verified.payload();
         return new LicenseInfoResponse(
@@ -141,8 +246,8 @@ public class LicenseServiceImpl implements LicenseService {
                 payload.limits(),
                 payload.keyId(),
                 sha256Hex(verified.payloadBytes()),
-                null,
-                false,
+                serverFingerprint,
+                serverBound,
                 payload.issuedAt()
         );
     }
@@ -159,21 +264,25 @@ public class LicenseServiceImpl implements LicenseService {
     private record ResolvedLicense(
             boolean present,
             String status,
-            SignedLicenseVerifier.VerifiedLicense verified
+            SignedLicenseVerifier.VerifiedLicense verified,
+            String serverFingerprint,
+            boolean serverBound
     ) {
         static ResolvedLicense missing() {
-            return new ResolvedLicense(false, LicenseRuntimeStatus.MISSING, null);
+            return new ResolvedLicense(false, LicenseRuntimeStatus.MISSING, null, null, false);
         }
 
         static ResolvedLicense invalid() {
-            return new ResolvedLicense(true, LicenseRuntimeStatus.INVALID, null);
+            return new ResolvedLicense(true, LicenseRuntimeStatus.INVALID, null, null, false);
         }
 
         static ResolvedLicense present(
                 SignedLicenseVerifier.VerifiedLicense verified,
-                String status
+                String status,
+                String serverFingerprint,
+                boolean serverBound
         ) {
-            return new ResolvedLicense(true, status, verified);
+            return new ResolvedLicense(true, status, verified, serverFingerprint, serverBound);
         }
 
         LicenseInfoResponse toResponse() {
@@ -190,12 +299,12 @@ public class LicenseServiceImpl implements LicenseService {
                         null,
                         null,
                         null,
-                        null,
-                        false,
+                        serverFingerprint,
+                        serverBound,
                         null
                 );
             }
-            return LicenseServiceImpl.toResponse(verified, status);
+            return LicenseServiceImpl.toResponse(verified, status, serverFingerprint, serverBound);
         }
     }
 }

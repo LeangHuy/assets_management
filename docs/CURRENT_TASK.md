@@ -6,63 +6,64 @@ Completed
 
 ## Objective
 
-Integrate `com.hunesion:license-runtime:0.0.1-SNAPSHOT` and remove duplicated local license crypto/signing/storage code.
+Align `official-license-request.json` export with the issuer activation-request schema used by `license-key-format` / `license-key-ui`.
 
 ## Context
 
-- Shared license runtime was extracted to `license-runtime` JAR.
-- `assets_management` retains product-specific device-limit enforcement via `assertCanCreateDevice()`.
+The issuer expects nested `formatVersion`, `requestId`, `demoLicense`, and `installation` (with `fingerprintComputedAt`). Assets management still exported a flat `version` / `requestType` shape, so uploads failed client validation.
 
 ## Requirements
 
-1. Depend on `license-runtime` from Maven Local.
-2. Refactor `LicenseServiceImpl` to import from `com.hunesion.license.runtime.*`.
-3. On activate, require `limits.devices`; catch `LicenseException` in `resolveLicense`.
-4. Handle `LicenseException` in `GlobalExceptionHandler`.
-5. Add `@ConditionalOnMissingBean` to `TimeConfig` Clock bean.
-6. Delete local `license/crypto`, `license/signing`, `license/storage`, `license/support`, and `license/domain/LicenseRuntimeStatus`.
+1. Change `OfficialLicenseRequest` to the nested issuer schema.
+2. Generate a new UUID `requestId` per export.
+3. Include `fingerprintComputedAt` from `FingerprintMeta.computedAt`.
+4. Do not embed customer/product/expiry/claims for the issuer to trust.
+5. `./gradlew compileJava` must succeed.
 
 ## Out of scope
 
-- Changing license REST API shape.
-- Moving device-limit logic into the shared library.
+- Issuer or license-key-ui changes
+- Online activation registry
 
 ## Acceptance criteria
 
-- `./gradlew compileJava test` succeeds.
-- Local duplicate license runtime classes are removed.
-- Device registration still calls `assertCanCreateDevice()`.
+- Downloaded JSON validates against the issuer activation-request schema.
+- File still named `official-license-request.json`.
 
 ## Relevant files
 
-- `build.gradle`
+- `license/dto/OfficialLicenseRequest.java`
 - `license/service/serviceImpl/LicenseServiceImpl.java`
-- `common/exception/GlobalExceptionHandler.java`
-- `common/config/TimeConfig.java`
+- `license/fingerprint/OfficialLicenseRequestStore.java`
+
+## Risks and constraints
+
+- Existing on-disk request JSON files are the old flat shape and must be regenerated.
 
 ## Implementation result
 
 ### Status
 
-Completed on 2026-07-24.
+Completed on 2026-07-30.
 
 ### Files changed
 
-- `build.gradle`: Added `mavenLocal()` and `implementation 'com.hunesion:hns-license-lib:1.0.0'`.
-- `LicenseServiceImpl.java`: Switched to library imports; requires `limits.devices` on activate; catches `LicenseException` in `resolveLicense`.
-- `GlobalExceptionHandler.java`: Added `LicenseException` handler.
-- `TimeConfig.java`: Added `@ConditionalOnMissingBean` on Clock bean.
-- Deleted 13 local license runtime classes under `license/crypto`, `license/signing`, `license/storage`, `license/support`, and `license/domain`.
+- `OfficialLicenseRequest.java` — nested `formatVersion` / `requestId` / `demoLicense` / `installation`
+- `LicenseServiceImpl.java` — builds new shape; UUID `requestId`; `fingerprintComputedAt` from binding
+- `OfficialLicenseRequestStore.java` — log fields updated
+- `docs/DECISIONS.md` — ADR-004 updated
+- `docs/CURRENT_TASK.md` / `docs/WORK_REPORT.md`
 
 ### Verification
 
 - `./gradlew compileJava` — Passed
-- `./gradlew test` — Passed
+- `./gradlew test` — Passed (no test sources)
 
 ### Known limitations
 
-- Public key must still be configured via `LICENSE_SIGNING_PUBLIC_KEY` / `license.signing.public-key`.
+- Existing flat `official-license-request.json` files on disk must be regenerated via the Generate Official License Request action.
+- Old `fingerprint.meta` without `computedAt` still requires re-activation.
 
 ### Remaining work
 
-- None for this integration task.
+- None for this alignment task.
