@@ -1,5 +1,34 @@
 # Work Reports
 
+## 2026-07-31
+
+### Today's Work
+
+- Enforced issuer-embedded `serverFingerprint` so an OFFICIAL `.lic` cannot activate on a different server.
+- Refreshed `hns-license-lib` with the optional payload field.
+
+### Technical Changes
+
+- `LicenseServiceImpl.java`: Rejects activate with 403 on payload fingerprint mismatch; resolve returns `BINDING_INVALID` when payload or local meta mismatches.
+- `libs/hns-license-lib-1.0.0.jar`: Refreshed from `license-runtime`.
+- `docs/DECISIONS.md`: Superseded ADR-004; added ADR-006.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava`)
+
+### Known Issues
+
+- Already-issued OFFICIAL licenses without embedded fingerprint still activate on any server until re-issued.
+- Docker hosts must rebuild/redeploy with the new JAR and a newly issued OFFICIAL license to verify cross-server rejection.
+
+### Next Work Plan
+
+- Redeploy assets_management on both servers, re-request/re-issue OFFICIAL from server 1, confirm server 2 activate fails.
+
 ## 2026-07-30 (activation-request JSON alignment)
 
 ### Today's Work

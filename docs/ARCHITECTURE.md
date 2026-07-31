@@ -70,7 +70,7 @@ libs/          hns-license-lib JAR
 
 - Public key only — private signing key stays in `license-key-format`.
 - Exactly one active license file per installation (singleton replace-on-activate).
-- Server fingerprint is local Phase A binding; future issuer binding will use offline file exchange, not an online registry client.
+- Server fingerprint: local Phase A binding for TEMPORARY; OFFICIAL licenses carry issuer-embedded `serverFingerprint` enforced on activate/status.
 - Keep API DTOs separate from persistence models.
 - Annotation-based MyBatis mappers (no XML).
 - Prefer additive SQL under `src/main/resources/schema/`.

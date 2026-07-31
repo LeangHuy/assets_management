@@ -19,6 +19,7 @@ import com.hunesion.license.runtime.exception.LicenseException;
 import com.hunesion.license.runtime.storage.LicenseFileStore;
 import com.hunesion.license.runtime.support.LicenseFileReader;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LicenseServiceImpl implements LicenseService {
@@ -159,6 +161,7 @@ public class LicenseServiceImpl implements LicenseService {
 
         InstallationMeta identity = serverIdentityStore.ensurePresent();
         String fingerprint = serverFingerprintProvider.compute(identity.installationId());
+        requirePayloadFingerprintMatch(payload, fingerprint);
         String payloadHash = sha256Hex(verified.payloadBytes());
 
         licenseFileStore.write(verified.licenseKey());
@@ -170,6 +173,24 @@ public class LicenseServiceImpl implements LicenseService {
         ));
 
         return toResponse(verified, LicenseRuntimeStatus.ACTIVE, fingerprint, true);
+    }
+
+    /**
+     * When the signed payload embeds a server fingerprint (OFFICIAL licenses),
+     * it must match this host. Blank/null means unbound (TEMPORARY demos).
+     */
+    private static void requirePayloadFingerprintMatch(LicensePayload payload, String currentFingerprint) {
+        log.info("payload :{}", payload);
+        log.info("currentFingerprint :{}", currentFingerprint);
+
+        String embedded = payload.serverFingerprint();
+        if (embedded == null || embedded.isBlank()) {
+            return;
+        }
+        if (!embedded.equalsIgnoreCase(currentFingerprint)) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "This license is bound to another server");
+        }
     }
 
     private void requireDevicesLimit(LicensePayload payload) {
@@ -207,10 +228,16 @@ public class LicenseServiceImpl implements LicenseService {
                 .orElseGet(serverIdentityStore::ensurePresent);
         String currentFingerprint = serverFingerprintProvider.compute(identity.installationId());
 
-        if (binding.isEmpty()
+        String embeddedFingerprint = verified.payload().serverFingerprint();
+        boolean payloadBindingMismatch = embeddedFingerprint != null
+                && !embeddedFingerprint.isBlank()
+                && !embeddedFingerprint.equalsIgnoreCase(currentFingerprint);
+        boolean localBindingMismatch = binding.isEmpty()
                 || binding.get().serverFingerprint() == null
                 || binding.get().serverFingerprint().isBlank()
-                || !binding.get().serverFingerprint().equals(currentFingerprint)) {
+                || !binding.get().serverFingerprint().equals(currentFingerprint);
+
+        if (payloadBindingMismatch || localBindingMismatch) {
             return ResolvedLicense.present(
                     verified,
                     LicenseRuntimeStatus.BINDING_INVALID,

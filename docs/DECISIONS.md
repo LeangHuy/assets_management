@@ -29,12 +29,13 @@
 
 ## ADR-004: Future issuer binding via offline files only
 
-- Status: Accepted
+- Status: Superseded by ADR-006
 - Context: The full license diagram includes an activation request to the issuer and a signed activation certificate. Network access from customer servers to the issuer may be unavailable.
 - Decision: Do not add an online `ActivationRegistryClient` in Phase A. When issuer binding is added later, use offline file export/import only.
 - Rationale: Aligns with air-gapped customer deployments and avoids coupling activate to issuer availability.
 - Consequences: Phase A cannot prevent the same `.lic` from being activated on two servers that never sync with the issuer; that gap is accepted until offline issuer binding ships.
 - Date: 2026-07-30
+- Updated: 2026-07-31 — superseded by ADR-006 (fingerprint embedded in signed OFFICIAL payload via offline activation request).
 
 ## ADR-005: Compose stack with nginx HTTPS on port 9005
 
@@ -44,3 +45,12 @@
 - Rationale: One deploy folder matches ops expectations; reverse-proxy avoids exposing backend/UI ports and keeps CORS/TLS at the edge; source repos stay free of compose/certs clutter.
 - Consequences: Operators must set `PUBLIC_HOST` / `CORS_ALLOWED_ORIGINS` to the IP or hostname clients use; browsers warn on self-signed certs until a trusted cert is installed; sibling checkouts of `assets_management` and `assets-management-ui` are required next to `assets-management-docker`.
 - Date: 2026-07-30
+
+## ADR-006: Enforce issuer-embedded serverFingerprint for OFFICIAL
+
+- Status: Accepted
+- Context: Local `fingerprint.meta` alone rebinds on each activate, so copying an OFFICIAL `.lic` to another server still succeeded. The issuer now embeds `serverFingerprint` in new OFFICIAL payloads (offline activation request → approve).
+- Decision: On activate and resolve, if the signed payload has a non-blank `serverFingerprint`, it must match the current host fingerprint; otherwise reject activate with 403 or return `BINDING_INVALID`. TEMPORARY licenses omit the field and keep local bind-on-activate. Already-issued OFFICIAL licenses without the field remain accepted (backward compatible). Keep writing `fingerprint.meta` as a local cache for TEMPORARY request export and host-change detection.
+- Rationale: Signed binding closes the cross-server reuse gap without an online registry, matching air-gapped offline file exchange.
+- Consequences: Redeploy with refreshed `hns-license-lib`. Operators must re-request/re-issue OFFICIAL to bind existing customers. Local meta alone is no longer sufficient for OFFICIAL enforcement.
+- Date: 2026-07-31
