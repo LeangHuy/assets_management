@@ -41,8 +41,9 @@ libs/          hns-license-lib JAR
 2. Operator uploads a signed `.lic` from `license-key-format`.
 3. Service verifies Ed25519 signature (public key), validates payload, requires `limits.devices_limit`.
 4. Service ensures a stable `installation_id`, computes a server fingerprint, stores the `.lic` and a `fingerprint.meta` sidecar beside `license.storage.path`.
-5. Status and device-create paths re-verify the file and recompute the fingerprint; mismatch yields `BINDING_INVALID`.
-6. Device create is blocked when license is missing, invalid, expired, or binding-invalid, or when device count reaches `devices_limit`.
+5. Operators may generate offline LMS request files: TEMPORARY → `official-license-request.json` (`CONVERSION`); OFFICIAL (ACTIVE/EXPIRED) → `renewal-official-license-request.json` (`RENEWAL`).
+6. Status and device-create paths re-verify the file and recompute the fingerprint; mismatch yields `BINDING_INVALID`.
+7. Device create is blocked when license is missing, invalid, expired, or binding-invalid, or when device count reaches `devices_limit`.
 
 ## Authentication and authorization
 

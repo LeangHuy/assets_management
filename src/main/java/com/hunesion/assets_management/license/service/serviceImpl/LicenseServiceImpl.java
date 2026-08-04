@@ -97,45 +97,57 @@ public class LicenseServiceImpl implements LicenseService {
 
     @Override
     @Transactional
-    public byte[] generateOfficialLicenseRequest() {
+    public LicenseRequestFile generateOfficialLicenseRequest() {
         ResolvedLicense resolved = resolveLicense();
         LicenseInfoResponse info = resolved.toResponse();
 
         if (!info.present() || resolved.verified() == null) {
             throw new ApiException(HttpStatus.FORBIDDEN,
-                    "No active license. Activate a demo .lic file before generating an official license request");
+                    "No active license. Activate a .lic file before generating a license request");
         }
         if (LicenseRuntimeStatus.INVALID.equals(info.status())) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "License file is invalid or has been tampered with");
         }
-        if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
-        }
         if (LicenseRuntimeStatus.BINDING_INVALID.equals(info.status()) || !info.serverBound()) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "License binding is invalid for this server. Re-activate the .lic file before generating a request");
         }
-        if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
-        }
 
         LicensePayload payload = resolved.verified().payload();
-        if (!"TEMPORARY".equalsIgnoreCase(payload.licenseType())) {
+        String licenseType = payload.licenseType() == null ? "" : payload.licenseType().trim().toUpperCase();
+        String requestType;
+        if ("TEMPORARY".equals(licenseType)) {
+            if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
+            }
+            if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
+            }
+            requestType = OfficialLicenseRequest.REQUEST_TYPE_CONVERSION;
+        } else if ("OFFICIAL".equals(licenseType)) {
+            if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())
+                    && !LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
+                throw new ApiException(HttpStatus.FORBIDDEN,
+                        "Official license must be ACTIVE or EXPIRED to generate a renewal request");
+            }
+            requestType = OfficialLicenseRequest.REQUEST_TYPE_RENEWAL;
+        } else {
             throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "Official license request can only be generated from an active TEMPORARY (demo) license");
+                    "License request can only be generated from TEMPORARY or OFFICIAL licenses");
         }
 
         InstallationMeta identity = serverIdentityStore.read()
                 .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN,
-                        "installation.meta is missing. Re-activate the demo license"));
+                        "installation.meta is missing. Re-activate the license"));
         FingerprintMeta binding = licenseBindingStore.read()
                 .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN,
-                        "fingerprint.meta is missing. Re-activate the demo license"));
+                        "fingerprint.meta is missing. Re-activate the license"));
 
         OfficialLicenseRequest request = new OfficialLicenseRequest(
                 OfficialLicenseRequest.CURRENT_FORMAT_VERSION,
                 UUID.randomUUID().toString(),
+                requestType,
                 new OfficialLicenseRequest.DemoLicense(
                         payload.licenseId(),
                         payload.licenseNumber(),
@@ -150,7 +162,8 @@ public class LicenseServiceImpl implements LicenseService {
                 Instant.now(clock)
         );
 
-        return officialLicenseRequestStore.write(request);
+        byte[] content = officialLicenseRequestStore.write(request);
+        return new LicenseRequestFile(content, OfficialLicenseRequestStore.fileNameFor(request));
     }
 
     private LicenseInfoResponse activateLicenseKey(String licenseKey) {

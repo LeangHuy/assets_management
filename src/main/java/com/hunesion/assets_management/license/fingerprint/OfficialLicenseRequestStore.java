@@ -15,48 +15,56 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Persists {@code official-license-request.json} in the license storage directory.
+ * Persists offline license-request JSON beside the license storage directory.
  */
 @Slf4j
 @Component
 public class OfficialLicenseRequestStore {
 
-    public static final String FILE_NAME = "official-license-request.json";
+    public static final String CONVERSION_FILE_NAME = "official-license-request.json";
+    public static final String RENEWAL_FILE_NAME = "renewal-official-license-request.json";
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    private final Path requestPath;
+    private final Path storageDir;
 
     public OfficialLicenseRequestStore(LicenseStorageProperties storageProperties) {
         Path licensePath = Path.of(storageProperties.getPath().trim());
         Path parent = licensePath.getParent();
-        this.requestPath = (parent != null ? parent : Path.of(".")).resolve(FILE_NAME);
-        log.info("Official license request store path={}", requestPath.toAbsolutePath());
+        this.storageDir = parent != null ? parent : Path.of(".");
+        log.info("Official license request store dir={}", storageDir.toAbsolutePath());
+    }
+
+    public static String fileNameFor(OfficialLicenseRequest request) {
+        if (OfficialLicenseRequest.REQUEST_TYPE_RENEWAL.equalsIgnoreCase(request.requestType())) {
+            return RENEWAL_FILE_NAME;
+        }
+        return CONVERSION_FILE_NAME;
     }
 
     public byte[] write(OfficialLicenseRequest request) {
+        String fileName = fileNameFor(request);
+        Path requestPath = storageDir.resolve(fileName);
         try {
-            Path parent = requestPath.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
+            Files.createDirectories(storageDir);
             String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(request);
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            Path temp = requestPath.resolveSibling(FILE_NAME + ".tmp");
+            Path temp = requestPath.resolveSibling(fileName + ".tmp");
             Files.write(temp, bytes);
             Files.move(temp, requestPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             log.info(
-                    "Wrote {} to {}: requestId={}, demoLicenseId={}, installationId={}, serverFingerprint={}",
-                    FILE_NAME,
+                    "Wrote {} to {}: requestId={}, requestType={}, sourceLicenseId={}, installationId={}, serverFingerprint={}",
+                    fileName,
                     requestPath.toAbsolutePath(),
                     request.requestId(),
+                    request.requestType(),
                     request.demoLicense().licenseId(),
                     request.installation().installationId(),
                     request.installation().serverFingerprint()
             );
             return bytes;
         } catch (IOException ex) {
-            throw new LicenseException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to write " + FILE_NAME);
+            throw new LicenseException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to write " + fileName);
         }
     }
 }

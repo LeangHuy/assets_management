@@ -1,5 +1,56 @@
 # Work Reports
 
+## 2026-08-04 (renewal request filename)
+
+### Today's Work
+
+- Named renewal downloads `renewal-official-license-request.json` (conversion keeps `official-license-request.json`).
+
+### Technical Changes
+
+- `OfficialLicenseRequestStore`: writes the filename based on `requestType`.
+- `LicenseService.LicenseRequestFile` + controller `Content-Disposition` use that name.
+
+### Verification
+
+- Build: Passed (`./gradlew compileJava`)
+
+### Known Issues
+
+- None.
+
+### Next Work Plan
+
+- Redeploy SRA and verify the downloaded renewal filename in the browser.
+
+## 2026-08-04 (renewal request generation)
+
+### Today's Work
+
+- Allowed bound OFFICIAL licenses (ACTIVE or EXPIRED) to generate offline renewal requests.
+- Kept TEMPORARY conversion request generation for first official issue.
+
+### Technical Changes
+
+- `OfficialLicenseRequest.java`: added `requestType` (`CONVERSION` | `RENEWAL`).
+- `LicenseServiceImpl.generateOfficialLicenseRequest`: branches by license type and status.
+- `docs/DECISIONS.md`: ADR-007; `docs/ARCHITECTURE.md` data-flow step for request generation.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava`)
+
+### Known Issues
+
+- Requires issuer ADR-016 deployed to accept RENEWAL files.
+
+### Next Work Plan
+
+- Redeploy with issuer/UI and verify renewal E2E.
+
 ## 2026-07-31
 
 ### Today's Work

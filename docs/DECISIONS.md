@@ -54,3 +54,13 @@
 - Rationale: Signed binding closes the cross-server reuse gap without an online registry, matching air-gapped offline file exchange.
 - Consequences: Redeploy with refreshed `hns-license-lib`. Operators must re-request/re-issue OFFICIAL to bind existing customers. Local meta alone is no longer sufficient for OFFICIAL enforcement.
 - Date: 2026-07-31
+
+## ADR-007: Offline request generation for CONVERSION and RENEWAL
+
+- Status: Accepted
+- Context: Official conversion required a TEMPORARY demo. After OFFICIAL activation, engineers could not export another request to update expiry/claims.
+- Decision: `POST /api/v1/license/official-request` accepts TEMPORARY (ACTIVE) as `requestType=CONVERSION` and OFFICIAL (ACTIVE or EXPIRED) as `requestType=RENEWAL`, both requiring a valid server binding. Download/persist filenames are `official-license-request.json` (CONVERSION) and `renewal-official-license-request.json` (RENEWAL). The nested `demoLicense` object remains the source-license field for issuer wire compatibility.
+- Rationale: Same offline handoff content for first official issue and later renewals; distinct filenames make renewals obvious to operators; issuer distinguishes kinds via `requestType`.
+- Consequences: Expired OFFICIAL can still generate renewals; INVALID / BINDING_INVALID cannot. Issuer must understand `RENEWAL` (issuer ADR-016).
+- Date: 2026-08-04
+- Updated: 2026-08-04 — renewal download filename is `renewal-official-license-request.json`.

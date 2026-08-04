@@ -12,8 +12,11 @@ public interface LicenseService {
     void assertCanCreateDevice();
 
     /**
-     * Builds {@code official-license-request.json} from the active bound demo license
-     * and returns the file bytes for download.
+     * Builds an offline license-request JSON from the active bound TEMPORARY (CONVERSION)
+     * or OFFICIAL (RENEWAL) license and returns the file bytes plus download filename.
      */
-    byte[] generateOfficialLicenseRequest();
+    LicenseRequestFile generateOfficialLicenseRequest();
+
+    record LicenseRequestFile(byte[] content, String filename) {
+    }
 }

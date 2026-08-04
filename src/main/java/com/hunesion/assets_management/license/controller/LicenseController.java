@@ -49,15 +49,17 @@ public class LicenseController {
 
     @PostMapping("/official-request")
     @Operation(
-            summary = "Generate official license request file",
-            description = "Builds official-license-request.json from the active TEMPORARY (demo) license, "
-                    + "installation id, and server fingerprint for offline upload to the License Management System."
+            summary = "Generate official or renewal license request file",
+            description = "Builds official-license-request.json (CONVERSION from TEMPORARY) or "
+                    + "renewal-official-license-request.json (RENEWAL from ACTIVE/EXPIRED OFFICIAL) "
+                    + "for offline upload to the License Management System."
     )
     public ResponseEntity<byte[]> generateOfficialLicenseRequest() {
-        byte[] body = licenseService.generateOfficialLicenseRequest();
+        LicenseService.LicenseRequestFile file = licenseService.generateOfficialLicenseRequest();
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"official-license-request.json\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + file.filename() + "\"")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(body);
+                .body(file.content());
     }
 }
