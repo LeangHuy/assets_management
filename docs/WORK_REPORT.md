@@ -1,5 +1,61 @@
 # Work Reports
 
+## 2026-08-05 (consume versioned ServerFingerprint)
+
+### Today's Work
+
+- Updated license activate/resolve to use versioned `ServerFingerprint` from `hns-license-lib` 1.0.3.
+
+### Technical Changes
+
+- `LicenseServiceImpl.java`: persists `fingerprint.value()` and `fingerprint.version()` into `fingerprint.meta`.
+- `build.gradle` / `AGENTS.md`: depend on `hns-license-lib-1.0.3.jar`.
+- ADR-001 / ADR-009 updated.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava --rerun-tasks`)
+
+### Known Issues
+
+- Unused older JARs may remain under `libs/`.
+
+### Next Work Plan
+
+- Remove leftover older JARs when not locked.
+
+## 2026-08-05 (consume lib fingerprint compute)
+
+### Today's Work
+
+- Switched server fingerprint computation to `hns-license-lib` 1.0.2.
+- Removed the local `ServerFingerprintProvider` class.
+
+### Technical Changes
+
+- `build.gradle` / `AGENTS.md`: depend on `libs/hns-license-lib-1.0.2.jar`.
+- `LicenseServiceImpl.java`: injects `com.hunesion.license.runtime.fingerprint.ServerFingerprintProvider`.
+- Deleted local `license/fingerprint/ServerFingerprintProvider.java`.
+- ADR-009; ADR-001 / ARCHITECTURE updated.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava --rerun-tasks`)
+
+### Known Issues
+
+- `libs/hns-license-lib-1.0.1.jar` could not be deleted (file locked); unused by build.gradle.
+
+### Next Work Plan
+
+- Delete the leftover 1.0.1 JAR when the process lock is released.
+
 ## 2026-08-05 (host-only fingerprint, no installationId)
 
 ### Today's Work

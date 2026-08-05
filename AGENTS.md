@@ -8,7 +8,7 @@
 - MariaDB
 - springdoc OpenAPI
 - Lombok
-- `hns-license-lib` (`libs/hns-license-lib-1.0.1.jar`) for Ed25519 license verify/storage
+- `hns-license-lib` (`libs/hns-license-lib-1.0.3.jar`) for Ed25519 license verify/storage
 
 ## Required workflow
 

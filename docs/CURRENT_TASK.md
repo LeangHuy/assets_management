@@ -6,30 +6,21 @@ Completed
 
 ## Objective
 
-Remove `installationId` from server fingerprint binding so fingerprints are host-only (`os_machine_id|host_identity|primary_mac`).
+Consume versioned `ServerFingerprint` from `hns-license-lib` 1.0.3.
 
 ## Context
 
-Operators want existing OFFICIAL licenses to remain usable after a product data reset on the same host, and the same host fingerprint across products without sharing `installation.meta`.
+Library `compute()` now returns hash + algorithm version together.
 
 ## Requirements
 
-1. Change fingerprint formula to exclude `installation_id`; bump `FINGERPRINT_VERSION` to 2.
-2. Delete `installation.meta` / `ServerIdentityStore` / `InstallationMeta`.
-3. Remove `installationId` from offline `OfficialLicenseRequest.Installation`.
-4. Update ADR / architecture docs.
-5. `./gradlew compileJava` passes.
+1. Depend on `hns-license-lib-1.0.3`.
+2. Use `fingerprint.value()` / `fingerprint.version()` in activate and resolve.
+3. Compile succeeds.
 
 ## Out of scope
 
-- Extracting fingerprint compute into `hns-license-lib` (separate follow-up).
-- Migrating already-issued OFFICIAL licenses (must re-request / re-issue).
-
-## Acceptance criteria
-
-1. Activate / status / official-request no longer read or write `installation.meta`.
-2. Offline request JSON has no `installationId`.
-3. Compile succeeds.
+- Moving binding stores into the lib.
 
 ## Implementation result
 
@@ -39,24 +30,18 @@ Completed on 2026-08-05.
 
 ### Files changed
 
-- `ServerFingerprintProvider.java`: host-only hash; `FINGERPRINT_VERSION = 2`.
-- Deleted `InstallationMeta.java`, `ServerIdentityStore.java`.
-- `OfficialLicenseRequest.Installation`: removed `installationId`.
-- `LicenseServiceImpl.java`: no identity store usage.
-- `OfficialLicenseRequestStore.java`: log without installationId.
-- ADR-008; ADR-003 superseded; ARCHITECTURE updated.
+- `build.gradle` / `AGENTS.md`: `hns-license-lib-1.0.3.jar`.
+- `LicenseServiceImpl.java`: uses `ServerFingerprint` value/version when binding.
+- ADR-001 / ADR-009 updated.
 
 ### Verification
 
-- `./gradlew compileJava` — Passed
+- `./gradlew compileJava --rerun-tasks` — Passed
 
 ### Known limitations
 
-- Existing OFFICIAL licenses with v1 (installation_id in hash) fail binding until re-issued.
-- Orphan `installation.meta` files on disk are ignored.
-- Containers sharing host machine-id/MAC get the same fingerprint.
+- Older `libs/hns-license-lib-1.0.1.jar` / `1.0.2.jar` may remain on disk unused.
 
 ### Remaining work
 
-- Redeploy product + issuer + UI; re-activate TEMPORARY and re-request/re-issue OFFICIAL for each bound server.
-- Optional: extract fingerprint compute into `hns-license-lib`.
+- Clean unused older JARs when unlocked.

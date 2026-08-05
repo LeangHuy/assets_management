@@ -7,13 +7,14 @@ import com.hunesion.assets_management.license.dto.OfficialLicenseRequest;
 import com.hunesion.assets_management.license.fingerprint.FingerprintMeta;
 import com.hunesion.assets_management.license.fingerprint.LicenseBindingStore;
 import com.hunesion.assets_management.license.fingerprint.OfficialLicenseRequestStore;
-import com.hunesion.assets_management.license.fingerprint.ServerFingerprintProvider;
 import com.hunesion.assets_management.license.service.LicenseService;
 import com.hunesion.license.runtime.crypto.LicensePayload;
 import com.hunesion.license.runtime.crypto.LicensePayloadValidator;
 import com.hunesion.license.runtime.crypto.SignedLicenseVerifier;
 import com.hunesion.license.runtime.domain.LicenseRuntimeStatus;
 import com.hunesion.license.runtime.exception.LicenseException;
+import com.hunesion.license.runtime.fingerprint.ServerFingerprint;
+import com.hunesion.license.runtime.fingerprint.ServerFingerprintProvider;
 import com.hunesion.license.runtime.storage.LicenseFileStore;
 import com.hunesion.license.runtime.support.LicenseFileReader;
 import lombok.RequiredArgsConstructor;
@@ -165,19 +166,19 @@ public class LicenseServiceImpl implements LicenseService {
         payloadValidator.validateForActivation(payload);
         requireDevicesLimit(payload);
 
-        String fingerprint = serverFingerprintProvider.compute();
-        requirePayloadFingerprintMatch(payload, fingerprint);
+        ServerFingerprint fingerprint = serverFingerprintProvider.compute();
+        requirePayloadFingerprintMatch(payload, fingerprint.value());
         String payloadHash = sha256Hex(verified.payloadBytes());
 
         licenseFileStore.write(verified.licenseKey());
         licenseBindingStore.write(new FingerprintMeta(
-                fingerprint,
-                ServerFingerprintProvider.FINGERPRINT_VERSION,
+                fingerprint.value(),
+                fingerprint.version(),
                 Instant.now(clock),
                 payloadHash
         ));
 
-        return toResponse(verified, LicenseRuntimeStatus.ACTIVE, fingerprint, true);
+        return toResponse(verified, LicenseRuntimeStatus.ACTIVE, fingerprint.value(), true);
     }
 
     /**
@@ -229,7 +230,8 @@ public class LicenseServiceImpl implements LicenseService {
         }
 
         Optional<FingerprintMeta> binding = licenseBindingStore.read();
-        String currentFingerprint = serverFingerprintProvider.compute();
+        ServerFingerprint fingerprint = serverFingerprintProvider.compute();
+        String currentFingerprint = fingerprint.value();
 
         String embeddedFingerprint = verified.payload().serverFingerprint();
         boolean payloadBindingMismatch = embeddedFingerprint != null

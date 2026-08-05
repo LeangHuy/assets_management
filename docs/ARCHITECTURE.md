@@ -11,7 +11,7 @@ Asset management service: register and manage devices, and enforce an active Ed2
 - springdoc OpenAPI UI
 - Jakarta Bean Validation
 - Lombok
-- `hns-license-lib` for signature verification and on-disk `.lic` storage
+- `hns-license-lib` for signature verification, on-disk `.lic` storage, and shared host fingerprint compute
 
 ## Major modules
 
@@ -26,7 +26,7 @@ Asset management service: register and manage devices, and enforce an active Ed2
 ```
 src/main/java/com/hunesion/assets_management/
   device/      controller, service, repository, dto, domain
-  license/     controller, service, dto, fingerprint/binding stores
+  license/     controller, service, dto, fingerprint binding/request stores
   common/      shared config and exceptions
 src/main/resources/
   application.yml

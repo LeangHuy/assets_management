@@ -4,7 +4,7 @@
 
 - Status: Accepted
 - Context: Ed25519 verify/store logic was duplicated across product services.
-- Decision: Depend on `libs/hns-license-lib-1.0.1.jar` (`com.hunesion.license.runtime.*`) for wire decode, signature verify, payload validation, and `LicenseFileStore`. Keep product claim enforcement in this service.
+- Decision: Depend on `libs/hns-license-lib-1.0.3.jar` (`com.hunesion.license.runtime.*`) for wire decode, signature verify, payload validation, `LicenseFileStore`, and host fingerprint compute. Keep product claim enforcement and binding sidecars in this service.
 - Rationale: Matches `account-management` and avoids re-copying crypto/storage code.
 - Consequences: After library changes, rebuild/copy the JAR into `libs/` (or switch to `mavenLocal()` coordinates). Configure `LICENSE_SIGNING_PUBLIC_KEY` and `LICENSE_STORAGE_PATH`.
 - Date: 2026-07-24
@@ -76,4 +76,13 @@
   - Omit `installationId` from offline official-request JSON; keep writing `fingerprint.meta` as a local TEMPORARY cache.
 - Rationale: Same-host product reset and multi-product same-machine binding use one stable host hash; OFFICIAL binding remains the embedded `serverFingerprint`.
 - Consequences: Breaking for v1 hashes — re-activate TEMPORARY and re-request/re-issue OFFICIAL. Weaker isolation for containers that share host identity inputs. Orphan `installation.meta` files are ignored.
+- Date: 2026-08-05
+
+## ADR-009: Fingerprint compute from hns-license-lib
+
+- Status: Accepted
+- Context: Other products need the same host fingerprint algorithm for OFFICIAL binding.
+- Decision: Consume `ServerFingerprintProvider` from `hns-license-lib` 1.0.3+. Use `ServerFingerprint(value, version)` from `compute()` when writing `fingerprint.meta`. Keep local binding enforcement / offline request stores in this service.
+- Rationale: Matches shared-runtime ADR-007; one formula across products.
+- Consequences: Refresh the file JAR (or Maven coordinates) when the library fingerprint algorithm changes.
 - Date: 2026-08-05
