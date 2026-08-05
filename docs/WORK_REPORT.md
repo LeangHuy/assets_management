@@ -1,5 +1,37 @@
 # Work Reports
 
+## 2026-08-05 (host-only fingerprint, no installationId)
+
+### Today's Work
+
+- Removed `installation_id` from the server fingerprint formula so binding is host-only.
+- Deleted local `installation.meta` identity store usage.
+- Stopped emitting `installationId` in offline official-license request JSON.
+
+### Technical Changes
+
+- `ServerFingerprintProvider.java`: `SHA-256(os_machine_id|host_identity|primary_mac)`; `FINGERPRINT_VERSION = 2`.
+- Deleted `InstallationMeta.java` and `ServerIdentityStore.java`.
+- `OfficialLicenseRequest.java` / `OfficialLicenseRequestStore.java` / `LicenseServiceImpl.java`: no installation id.
+- ADR-008 accepted; ADR-003 superseded; architecture docs updated.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava`)
+
+### Known Issues
+
+- Existing OFFICIAL licenses signed with v1 fingerprints fail activate until re-requested and re-issued.
+- Orphan `installation.meta` files are left on disk but unused.
+
+### Next Work Plan
+
+- Redeploy with matching issuer/UI changes and re-issue OFFICIAL licenses under fingerprint version 2.
+- Consider moving fingerprint compute into `hns-license-lib` for other products.
+
 ## 2026-08-04 (renewal request filename)
 
 ### Today's Work
@@ -61,7 +93,7 @@
 ### Technical Changes
 
 - `LicenseServiceImpl.java`: Rejects activate with 403 on payload fingerprint mismatch; resolve returns `BINDING_INVALID` when payload or local meta mismatches.
-- `libs/hns-license-lib-1.0.0.jar`: Refreshed from `license-runtime`.
+- `libs/hns-license-lib-1.0.1.jar`: Refreshed from `license-runtime`.
 - `docs/DECISIONS.md`: Superseded ADR-004; added ADR-006.
 
 ### Verification
@@ -227,7 +259,7 @@
 - `license/fingerprint/ServerIdentityStore.java`: Persists `installation.meta`.
 - `license/fingerprint/LicenseBindingStore.java`: Persists `fingerprint.meta`.
 - `LicenseServiceImpl.java`: Binds fingerprint on activate and validates it on status and device create.
-- `libs/hns-license-lib-1.0.0.jar`: Updated from `license-runtime` with `BINDING_INVALID`.
+- `libs/hns-license-lib-1.0.1.jar`: Updated from `license-runtime` with `BINDING_INVALID`.
 
 ### Verification
 

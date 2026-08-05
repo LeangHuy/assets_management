@@ -53,13 +53,12 @@ public class OfficialLicenseRequestStore {
             Files.write(temp, bytes);
             Files.move(temp, requestPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             log.info(
-                    "Wrote {} to {}: requestId={}, requestType={}, sourceLicenseId={}, installationId={}, serverFingerprint={}",
+                    "Wrote {} to {}: requestId={}, requestType={}, sourceLicenseId={}, serverFingerprint={}",
                     fileName,
                     requestPath.toAbsolutePath(),
                     request.requestId(),
                     request.requestType(),
                     request.demoLicense().licenseId(),
-                    request.installation().installationId(),
                     request.installation().serverFingerprint()
             );
             return bytes;

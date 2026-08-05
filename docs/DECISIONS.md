@@ -4,7 +4,7 @@
 
 - Status: Accepted
 - Context: Ed25519 verify/store logic was duplicated across product services.
-- Decision: Depend on `libs/hns-license-lib-1.0.0.jar` (`com.hunesion.license.runtime.*`) for wire decode, signature verify, payload validation, and `LicenseFileStore`. Keep product claim enforcement in this service.
+- Decision: Depend on `libs/hns-license-lib-1.0.1.jar` (`com.hunesion.license.runtime.*`) for wire decode, signature verify, payload validation, and `LicenseFileStore`. Keep product claim enforcement in this service.
 - Rationale: Matches `account-management` and avoids re-copying crypto/storage code.
 - Consequences: After library changes, rebuild/copy the JAR into `libs/` (or switch to `mavenLocal()` coordinates). Configure `LICENSE_SIGNING_PUBLIC_KEY` and `LICENSE_STORAGE_PATH`.
 - Date: 2026-07-24
@@ -20,12 +20,13 @@
 
 ## ADR-003: Local server fingerprint binding (Phase A)
 
-- Status: Accepted
+- Status: Superseded by ADR-008
 - Context: A license must be usable only on the server where it was activated. MAC-only binding is unstable under Docker/VMs.
 - Decision: At activate, ensure a persistent `installation_id`, compute `SHA-256(installation_id|os_machine_id|host_identity|primary_mac)`, and store the hash in `fingerprint.meta` beside the `.lic`. On status and device-create, recompute and compare; mismatch returns `BINDING_INVALID` and blocks device creation. Persist identity/binding as file sidecars under the license storage directory (not new DB tables).
 - Rationale: Matches the local `/data/.../license/` layout, survives container recreate when the storage path is volume-mounted, and does not require online access to the issuer.
 - Consequences: Hardware replacement or lost volume invalidates binding until the operator re-activates the same `.lic`. Issuer-side registry and Activation Certificates remain future work.
 - Date: 2026-07-30
+- Updated: 2026-08-05 — superseded by ADR-008 (host-only fingerprint, no installation_id).
 
 ## ADR-004: Future issuer binding via offline files only
 
@@ -64,3 +65,15 @@
 - Consequences: Expired OFFICIAL can still generate renewals; INVALID / BINDING_INVALID cannot. Issuer must understand `RENEWAL` (issuer ADR-016).
 - Date: 2026-08-04
 - Updated: 2026-08-04 — renewal download filename is `renewal-official-license-request.json`.
+
+## ADR-008: Host-only server fingerprint (no installation_id)
+
+- Status: Accepted
+- Context: Including a random `installation_id` in the fingerprint forced operators to re-request OFFICIAL after product data reset on the same host, and required shared meta for multi-product binding on one machine.
+- Decision:
+  - Compute `SHA-256(os_machine_id|host_identity|primary_mac)` only (`fingerprintVersion` 2).
+  - Remove `installation.meta` / `ServerIdentityStore` / `InstallationMeta`.
+  - Omit `installationId` from offline official-request JSON; keep writing `fingerprint.meta` as a local TEMPORARY cache.
+- Rationale: Same-host product reset and multi-product same-machine binding use one stable host hash; OFFICIAL binding remains the embedded `serverFingerprint`.
+- Consequences: Breaking for v1 hashes — re-activate TEMPORARY and re-request/re-issue OFFICIAL. Weaker isolation for containers that share host identity inputs. Orphan `installation.meta` files are ignored.
+- Date: 2026-08-05

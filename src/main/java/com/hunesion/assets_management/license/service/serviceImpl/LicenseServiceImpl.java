@@ -5,11 +5,9 @@ import com.hunesion.assets_management.device.repository.DeviceRepository;
 import com.hunesion.assets_management.license.dto.LicenseInfoResponse;
 import com.hunesion.assets_management.license.dto.OfficialLicenseRequest;
 import com.hunesion.assets_management.license.fingerprint.FingerprintMeta;
-import com.hunesion.assets_management.license.fingerprint.InstallationMeta;
 import com.hunesion.assets_management.license.fingerprint.LicenseBindingStore;
 import com.hunesion.assets_management.license.fingerprint.OfficialLicenseRequestStore;
 import com.hunesion.assets_management.license.fingerprint.ServerFingerprintProvider;
-import com.hunesion.assets_management.license.fingerprint.ServerIdentityStore;
 import com.hunesion.assets_management.license.service.LicenseService;
 import com.hunesion.license.runtime.crypto.LicensePayload;
 import com.hunesion.license.runtime.crypto.LicensePayloadValidator;
@@ -43,7 +41,6 @@ public class LicenseServiceImpl implements LicenseService {
     private final LicenseFileStore licenseFileStore;
     private final DeviceRepository deviceRepository;
     private final LicenseFileReader licenseFileReader;
-    private final ServerIdentityStore serverIdentityStore;
     private final LicenseBindingStore licenseBindingStore;
     private final OfficialLicenseRequestStore officialLicenseRequestStore;
     private final ServerFingerprintProvider serverFingerprintProvider;
@@ -137,9 +134,6 @@ public class LicenseServiceImpl implements LicenseService {
                     "License request can only be generated from TEMPORARY or OFFICIAL licenses");
         }
 
-        InstallationMeta identity = serverIdentityStore.read()
-                .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN,
-                        "installation.meta is missing. Re-activate the license"));
         FingerprintMeta binding = licenseBindingStore.read()
                 .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN,
                         "fingerprint.meta is missing. Re-activate the license"));
@@ -154,7 +148,6 @@ public class LicenseServiceImpl implements LicenseService {
                         binding.payloadHash()
                 ),
                 new OfficialLicenseRequest.Installation(
-                        identity.installationId(),
                         binding.serverFingerprint(),
                         binding.fingerprintVersion(),
                         binding.computedAt()
@@ -172,8 +165,7 @@ public class LicenseServiceImpl implements LicenseService {
         payloadValidator.validateForActivation(payload);
         requireDevicesLimit(payload);
 
-        InstallationMeta identity = serverIdentityStore.ensurePresent();
-        String fingerprint = serverFingerprintProvider.compute(identity.installationId());
+        String fingerprint = serverFingerprintProvider.compute();
         requirePayloadFingerprintMatch(payload, fingerprint);
         String payloadHash = sha256Hex(verified.payloadBytes());
 
@@ -237,9 +229,7 @@ public class LicenseServiceImpl implements LicenseService {
         }
 
         Optional<FingerprintMeta> binding = licenseBindingStore.read();
-        InstallationMeta identity = serverIdentityStore.read()
-                .orElseGet(serverIdentityStore::ensurePresent);
-        String currentFingerprint = serverFingerprintProvider.compute(identity.installationId());
+        String currentFingerprint = serverFingerprintProvider.compute();
 
         String embeddedFingerprint = verified.payload().serverFingerprint();
         boolean payloadBindingMismatch = embeddedFingerprint != null

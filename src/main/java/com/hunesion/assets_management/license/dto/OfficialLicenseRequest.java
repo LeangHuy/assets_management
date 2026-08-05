@@ -32,7 +32,6 @@ public record OfficialLicenseRequest(
     }
 
     public record Installation(
-            String installationId,
             String serverFingerprint,
             int fingerprintVersion,
             Instant fingerprintComputedAt

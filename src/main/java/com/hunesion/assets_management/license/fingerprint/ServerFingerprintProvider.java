@@ -17,34 +17,27 @@ import java.util.HexFormat;
 import java.util.Locale;
 
 /**
- * Computes a Phase A server fingerprint from installation id and host attributes.
+ * Computes a server fingerprint from host attributes only (no installation id).
  *
  * <pre>
- * SHA-256(UTF-8(installation_id + "|" + os_machine_id + "|" + host_identity + "|" + primary_mac))
+ * SHA-256(UTF-8(os_machine_id + "|" + host_identity + "|" + primary_mac))
  * </pre>
  */
 @Slf4j
 @Component
 public class ServerFingerprintProvider {
 
-    public static final int FINGERPRINT_VERSION = 1;
+    public static final int FINGERPRINT_VERSION = 2;
 
-    public String compute(String installationId) {
+    public String compute() {
         String osMachineId = readOsMachineId();
         String hostIdentity = readHostIdentity();
         String primaryMac = readPrimaryMac();
-        String canonical = String.join(
-                "|",
-                nullToEmpty(installationId),
-                osMachineId,
-                hostIdentity,
-                primaryMac
-        );
+        String canonical = String.join("|", osMachineId, hostIdentity, primaryMac);
         String fingerprint = sha256Hex(canonical);
         log.info(
-                "Computed server fingerprint version={}: installationId={}, osMachineId={}, hostIdentity={}, primaryMac={}, fingerprint={}",
+                "Computed server fingerprint version={}: osMachineId={}, hostIdentity={}, primaryMac={}, fingerprint={}",
                 FINGERPRINT_VERSION,
-                installationId,
                 osMachineId,
                 hostIdentity,
                 primaryMac.isEmpty() ? "(empty)" : primaryMac,
