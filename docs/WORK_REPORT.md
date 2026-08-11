@@ -1,5 +1,69 @@
 # Work Reports
 
+## 2026-08-11 (device-only claim allowlist)
+
+### Today's Work
+
+- Corrected assets_management activation so foreign-product claims are rejected.
+- A license with `devices_limit` plus `i_service` / `database_limit` / any other features can no longer activate on this service.
+- Kept safer activate hygiene from the earlier OTORAS alignment pass.
+
+### Technical Changes
+
+- `LicenseServiceImpl.java`: `requireAssetManagementClaims()` requires exactly `limits.devices_limit` and empty `features`.
+- `LicenseService.java`: removed unused database / I-Service assert APIs.
+- `docs/DECISIONS.md`: ADR-011 accepted; ADR-010 superseded.
+- `docs/ARCHITECTURE.md` / `AGENTS.md`: documented device-only claim contract.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava --rerun-tasks`)
+
+### Known Issues
+
+- Claim allowlist is enforced on activate, not re-checked on every status call for an already-written file.
+- Product code (`payload.product`) is not yet part of the reject rule.
+
+### Next Work Plan
+
+- Optionally enforce `payload.product` for assets_management.
+- Issue assets_management licenses with only `devices_limit` and empty features from LMS.
+
+## 2026-08-11 (OTORAS-aligned license claim gates)
+
+### Today's Work
+
+- Expanded assets_management license activation to require `devices_limit`, `database_limit`, and `features.i_service`.
+- Added runtime assert APIs for database equipment and I-Service while keeping device create on the existing gate.
+- Hardened activate hygiene by removing payload/fingerprint INFO logs and dropping unnecessary `@Transactional` on read-only license paths.
+
+### Technical Changes
+
+- `LicenseServiceImpl.java`: activation claim checks, `features` in status mapping, new asserts, no sensitive activate logging, no read-only `@Transactional`.
+- `LicenseService.java` / `LicenseInfoResponse.java`: new API surface and `features` field.
+- `docs/DECISIONS.md`: ADR-010; ADR-002 updated.
+- `docs/ARCHITECTURE.md` / `AGENTS.md`: documentation aligned with the new claim contract and `hns-license-lib` 1.0.4.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run (no test sources)
+- Build: Passed (`./gradlew compileJava test --rerun-tasks`)
+
+### Known Issues
+
+- Database-limit and I-Service asserts are not wired to any domain call sites yet.
+- Licenses without the new claims cannot be re-activated until re-issued.
+
+### Next Work Plan
+
+- Wire the new asserts when DB-equipment or I-Service flows are added.
+- Optionally update `assets-management-ui` license types to display `features` and `database_limit`.
+
 ## 2026-08-05 (consume versioned ServerFingerprint)
 
 ### Today's Work

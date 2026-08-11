@@ -21,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.MessageDigest;
@@ -29,13 +28,20 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class LicenseServiceImpl implements LicenseService {
+
+    private static final String LIMIT_DEVICES = "devices_limit";
+    private static final Set<String> ALLOWED_LIMIT_KEYS = Set.of(LIMIT_DEVICES);
 
     private final SignedLicenseVerifier signedLicenseVerifier;
     private final LicensePayloadValidator payloadValidator;
@@ -48,53 +54,36 @@ public class LicenseServiceImpl implements LicenseService {
     private final Clock clock;
 
     @Override
-    @Transactional
     public LicenseInfoResponse activateFromFile(MultipartFile file) {
+        // LicenseFileReader enforces .lic extension and HNS. wire prefix before verify.
         return activateLicenseKey(licenseFileReader.readLicenseKey(file));
     }
 
     @Override
-    @Transactional
     public LicenseInfoResponse status() {
         return resolveLicense().toResponse();
     }
 
     @Override
-    @Transactional
     public void assertCanCreateDevice() {
         ResolvedLicense resolved = resolveLicense();
-        LicenseInfoResponse info = resolved.toResponse();
+        LicenseInfoResponse info = requireActiveBoundLicense(resolved);
 
-        if (!info.present()) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "No active license. Upload and activate a .lic file before registering devices");
-        }
-        if (LicenseRuntimeStatus.INVALID.equals(info.status())) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "License file is invalid or has been tampered with. Upload a valid .lic file");
-        }
-        if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
-        }
-        if (LicenseRuntimeStatus.BINDING_INVALID.equals(info.status())) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "License binding is invalid for this server. Re-activate the .lic file on this host");
-        }
-        if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
+        Integer devicesLimit = info.limits() == null ? null : info.limits().get(LIMIT_DEVICES);
+        if (devicesLimit == null) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "License is missing limits.devices_limit");
         }
 
         long deviceCount = deviceRepository.countAllDevice();
-        if (deviceCount >= info.limits().get("devices_limit")) {
+        if (deviceCount >= devicesLimit) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Device limit reached (" + info.limits().get("devices_limit")
+                    "Device limit reached (" + devicesLimit
                             + "). Active and Recycle Bin devices both count toward the license. "
                             + "Cannot register more devices");
         }
     }
 
     @Override
-    @Transactional
     public LicenseRequestFile generateOfficialLicenseRequest() {
         ResolvedLicense resolved = resolveLicense();
         LicenseInfoResponse info = resolved.toResponse();
@@ -164,7 +153,7 @@ public class LicenseServiceImpl implements LicenseService {
         SignedLicenseVerifier.VerifiedLicense verified = signedLicenseVerifier.verify(licenseKey);
         LicensePayload payload = verified.payload();
         payloadValidator.validateForActivation(payload);
-        requireDevicesLimit(payload);
+        requireAssetManagementClaims(payload);
 
         ServerFingerprint fingerprint = serverFingerprintProvider.compute();
         requirePayloadFingerprintMatch(payload, fingerprint.value());
@@ -186,9 +175,6 @@ public class LicenseServiceImpl implements LicenseService {
      * it must match this host. Blank/null means unbound (TEMPORARY demos).
      */
     private static void requirePayloadFingerprintMatch(LicensePayload payload, String currentFingerprint) {
-        log.info("payload :{}", payload);
-        log.info("currentFingerprint :{}", currentFingerprint);
-
         String embedded = payload.serverFingerprint();
         if (embedded == null || embedded.isBlank()) {
             return;
@@ -199,11 +185,56 @@ public class LicenseServiceImpl implements LicenseService {
         }
     }
 
-    private void requireDevicesLimit(LicensePayload payload) {
-        Integer devices = payload.limits().get("devices_limit");
-        if (devices == null) {
-            throw new LicenseException(HttpStatus.BAD_REQUEST, "limits.devices is required for asset management");
+    /**
+     * Asset management accepts only {@code limits.devices_limit} and empty {@code features}.
+     * Licenses with OTORAS claims (e.g. {@code database_limit}, {@code i_service}) are rejected.
+     */
+    private void requireAssetManagementClaims(LicensePayload payload) {
+        Map<String, Integer> limits = payload.limits();
+        if (limits == null || !limits.containsKey(LIMIT_DEVICES)) {
+            throw new LicenseException(HttpStatus.BAD_REQUEST,
+                    "limits.devices_limit is required for asset management");
         }
+
+        Set<String> unexpectedLimits = limits.keySet().stream()
+                .filter(key -> !ALLOWED_LIMIT_KEYS.contains(key))
+                .collect(Collectors.toCollection(TreeSet::new));
+        if (!unexpectedLimits.isEmpty()) {
+            throw new LicenseException(HttpStatus.BAD_REQUEST,
+                    "License limits are not valid for asset management. Allowed: "
+                            + ALLOWED_LIMIT_KEYS + "; unexpected: " + unexpectedLimits);
+        }
+
+        Map<String, Boolean> features = payload.features();
+        if (features != null && !features.isEmpty()) {
+            throw new LicenseException(HttpStatus.BAD_REQUEST,
+                    "License features must be empty for asset management. Unexpected: "
+                            + new TreeSet<>(features.keySet()));
+        }
+    }
+
+    private LicenseInfoResponse requireActiveBoundLicense(ResolvedLicense resolved) {
+        LicenseInfoResponse info = resolved.toResponse();
+
+        if (!info.present()) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "No active license. Upload and activate a .lic file before registering devices");
+        }
+        if (LicenseRuntimeStatus.INVALID.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License file is invalid or has been tampered with. Upload a valid .lic file");
+        }
+        if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
+        }
+        if (LicenseRuntimeStatus.BINDING_INVALID.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License binding is invalid for this server. Re-activate the .lic file on this host");
+        }
+        if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
+        }
+        return info;
     }
 
     /**
@@ -276,6 +307,7 @@ public class LicenseServiceImpl implements LicenseService {
                 payload.licenseType(),
                 payload.expiresAt(),
                 payload.limits(),
+                payload.features(),
                 payload.keyId(),
                 sha256Hex(verified.payloadBytes()),
                 serverFingerprint,
@@ -325,6 +357,7 @@ public class LicenseServiceImpl implements LicenseService {
                 return new LicenseInfoResponse(
                         true,
                         status,
+                        null,
                         null,
                         null,
                         null,

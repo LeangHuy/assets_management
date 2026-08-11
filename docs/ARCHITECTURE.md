@@ -2,7 +2,7 @@
 
 ## System purpose
 
-Asset management service: register and manage devices, and enforce an active Ed25519-signed license (device limit + local server fingerprint binding) on the server where the product runs. Consumed by `assets-management-ui`. Licenses are issued by `license-key-format`; this service never signs licenses.
+Asset management service: register and manage devices, and enforce an active Ed25519-signed license (device-only `limits.devices_limit` + local server fingerprint binding) on the server where the product runs. Consumed by `assets-management-ui`. Licenses are issued by `license-key-format`; this service never signs licenses.
 
 ## Technology stack
 
@@ -18,7 +18,7 @@ Asset management service: register and manage devices, and enforce an active Ed2
 | Package | Responsibility |
 | --- | --- |
 | `device` | Device CRUD and inventory |
-| `license` | `.lic` upload/activate/status; server fingerprint binding; device-limit enforcement |
+| `license` | `.lic` upload/activate/status; server fingerprint binding; device-only `devices_limit` claim allowlist |
 | `common` | API envelope, CORS, OpenAPI, exceptions |
 
 ## Directory structure
@@ -39,7 +39,7 @@ libs/          hns-license-lib JAR
 
 1. Admin UI calls REST APIs on port `8082`.
 2. Operator uploads a signed `.lic` from `license-key-format`.
-3. Service verifies Ed25519 signature (public key), validates payload, requires `limits.devices_limit`.
+3. Service verifies Ed25519 signature (public key), validates payload, and requires exactly `limits.devices_limit` with empty `features` (rejects OTORAS extras such as `database_limit` / `i_service`). Upload path rejects non-`.lic` files and non-`HNS.` wire keys via `LicenseFileReader`.
 4. Service computes a host-only server fingerprint, stores the `.lic` and a `fingerprint.meta` sidecar beside `license.storage.path`.
 5. Operators may generate offline LMS request files: TEMPORARY → `official-license-request.json` (`CONVERSION`); OFFICIAL (ACTIVE/EXPIRED) → `renewal-official-license-request.json` (`RENEWAL`).
 6. Status and device-create paths re-verify the file and recompute the fingerprint; mismatch yields `BINDING_INVALID`.

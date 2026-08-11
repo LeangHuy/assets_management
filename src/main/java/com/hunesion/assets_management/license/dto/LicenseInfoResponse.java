@@ -2,8 +2,6 @@ package com.hunesion.assets_management.license.dto;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 
 public record LicenseInfoResponse(
@@ -13,6 +11,7 @@ public record LicenseInfoResponse(
         String licenseType,
         LocalDate expiresAt,
         Map<String, Integer> limits,
+        Map<String, Boolean> features,
         String keyId,
         String payloadHash,
         String serverFingerprint,
@@ -24,6 +23,7 @@ public record LicenseInfoResponse(
         return new LicenseInfoResponse(
                 false,
                 "MISSING",
+                null,
                 null,
                 null,
                 null,

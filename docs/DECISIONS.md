@@ -11,12 +11,13 @@
 
 ## ADR-002: Device limit from signed `limits.devices_limit`
 
-- Status: Accepted
+- Status: Accepted (extended by ADR-011)
 - Context: Asset registration must not exceed the licensed device cap.
 - Decision: On activate, require `limits.devices_limit`. On create device, count all devices (including recycle-bin statuses) and reject with 409 when at or above the limit.
 - Rationale: Claim values live only in the signed payload; the product owns enforcement.
 - Consequences: Licenses without `devices_limit` cannot activate on this service.
 - Date: 2026-07-24
+- Updated: 2026-08-11 — activation claim policy is device-only allowlist (ADR-011); ADR-010 superseded.
 
 ## ADR-003: Local server fingerprint binding (Phase A)
 
@@ -86,3 +87,31 @@
 - Rationale: Matches shared-runtime ADR-007; one formula across products.
 - Consequences: Refresh the file JAR (or Maven coordinates) when the library fingerprint algorithm changes.
 - Date: 2026-08-05
+
+## ADR-010: Align product claim gates with OTORAS consumer
+
+- Status: Superseded by ADR-011
+- Context: `OTORAS-Backend` already required `devices_limit`, `database_limit`, and `features.i_service` on activate, exposed feature-aware status, and avoided logging payload/fingerprint. assets_management only enforced devices and logged activate binding details at INFO.
+- Decision:
+  - On activate, require `limits.devices_limit`, `limits.database_limit`, and a present `features.i_service` key (true or false).
+  - Return `features` on license status; expose `assertCanCreateDbEquipment(long)` (caller-supplied count) and `assertIServiceFeature()` / `isIServiceLicensed()` for runtime gates.
+  - Keep `assertCanCreateDevice()` wired to device create; do not invent a DB-equipment domain yet.
+  - Rely on `LicenseFileReader` for `.lic` + `HNS.` validation; do not log payload or host fingerprint at INFO on activate.
+  - Do not annotate read-only license status/assert/resolve paths with `@Transactional`.
+- Rationale: Same signed claim contract across product consumers; safer ops logs; clearer transactional boundaries.
+- Consequences: Licenses missing the new claims cannot activate until re-issued. Future DB-equipment / I-Service call sites must call the new assert APIs.
+- Date: 2026-08-11
+- Updated: 2026-08-11 — superseded by ADR-011 (device-only claim allowlist).
+
+## ADR-011: Device-only claim allowlist for assets_management
+
+- Status: Accepted
+- Context: A single signed `.lic` may carry OTORAS claims (`database_limit`, `features.i_service`) that assets_management does not use. Activating a foreign product license would incorrectly authorize this service.
+- Decision:
+  - On activate, require exactly `limits.devices_limit` (no other limit keys).
+  - Require empty `features` (reject any feature key, including `i_service`).
+  - Keep safer activate hygiene from ADR-010 (`.lic`/`HNS.` via `LicenseFileReader`, no payload/fingerprint INFO logs, no read-only `@Transactional`).
+  - Do not expose database / I-Service assert APIs in this service.
+- Rationale: Each product consumer only accepts licenses that match its claim contract.
+- Consequences: OTORAS-style licenses with extra claims cannot activate here. Issuer must issue assets_management licenses with only `devices_limit` and no features.
+- Date: 2026-08-11
