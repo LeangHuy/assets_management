@@ -6,54 +6,61 @@ Completed
 
 ## Objective
 
-Enforce an assets_management-only claim allowlist on activate: require exactly `limits.devices_limit`, reject any other limit keys, and require empty `features` (so licenses with `i_service` or other product claims cannot activate).
+Add bulk device import (`POST /api/v1/devices/import`) that create-or-skips by active name and enforces licensed `limits.devices_limit` on each new create.
 
 ## Context
 
-Earlier OTORAS-style work required `database_limit` and `features.i_service`. Product policy for this service is device-only: a `.lic` built for OTORAS (devices + i_service / database) must be rejected here.
+Single-device create already called `assertCanCreateDevice()`. Operators need CSV-driven bulk registration without bypassing the device cap. Import mirrors OTORAS equipment file-integration semantics (create-or-skip).
 
 ## Requirements
 
-1. On activate, require `limits.devices_limit`.
-2. Reject activate when `limits` contains any key other than `devices_limit`.
-3. Reject activate when `features` is non-empty.
-4. Remove unused `assertCanCreateDbEquipment` / `assertIServiceFeature` / `isIServiceLicensed` APIs.
-5. Keep safer activate hygiene (no payload/fingerprint INFO logs; `.lic`/`HNS.` via `LicenseFileReader`; no read-only `@Transactional`).
-6. Update ADR-010 / architecture docs to match.
+1. Accept a JSON body `{ "devices": [ { "name", "ipAddress?" } ] }`.
+2. Reject duplicate names within the same request (409).
+3. Skip rows that already have an ACTIVE device with the same name (case-insensitive).
+4. Call `assertCanCreateDevice()` before each new insert; report per-row failures in `errors`.
+5. Return `{ created, createdCount, skippedCount, errors }`.
 
 ## Out of scope
 
-- Product-code matching (`payload.product`) unless already required by the lib validator.
-- UI changes.
+- Multipart CSV upload on the API (UI parses CSV client-side).
+- Unique DB constraint on device name.
+- Hard-failing the whole import when the license limit is reached mid-batch.
 
 ## Acceptance criteria
 
-- License with only `devices_limit` and empty features activates.
-- License with `devices_limit` + `i_service` is rejected.
-- License with `devices_limit` + `database_limit` is rejected.
+- Import creates new ACTIVE devices under the license limit.
+- Existing active names are skipped, not overwritten.
+- When the limit is reached, further rows appear in `errors` with the limit message.
+- Duplicate names in one request return 409.
 - `./gradlew compileJava` succeeds.
 
 ## Relevant files
 
-- `LicenseService.java`, `LicenseServiceImpl.java`, `LicenseInfoResponse.java`
-- `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`, `docs/CURRENT_TASK.md`
+- `device/controller/DeviceController.java`
+- `device/service/DeviceServiceImpl.java`
+- `device/dto/DeviceImport*.java`
+- `device/repository/DeviceRepository.java`
+- `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`
 
 ## Risks and constraints
 
-- Existing activated OTORAS-style licenses cannot be re-activated on this service (intended).
+- Recycle Bin devices already count toward the limit (ADR-002); import cannot create more until space frees or the license increases.
+- INACTIVE devices with the same name do not block import (same as OTORAS active-only skip).
 
 ## Implementation result
 
 ### Status
 
-Completed on 2026-08-11.
+Completed on 2026-08-12.
 
 ### Files changed
 
-- `LicenseServiceImpl.java`: `requireAssetManagementClaims()` allowlists only `devices_limit` and empty `features`.
-- `LicenseService.java`: removed DB / I-Service assert APIs.
-- `docs/DECISIONS.md`: ADR-010 superseded; ADR-011 accepted.
-- `docs/ARCHITECTURE.md` / `AGENTS.md`: device-only claim contract.
+- `DeviceImportRequest.java`, `DeviceImportRow.java`, `DeviceImportResult.java`, `DeviceImportErrorItem.java`: import DTOs.
+- `DeviceRepository.java`: `findActiveByNameIgnoreCase`.
+- `DeviceService.java` / `DeviceServiceImpl.java`: `importDevices` create-or-skip + license gate.
+- `DeviceController.java`: `POST /api/v1/devices/import`.
+- `docs/DECISIONS.md`: ADR-012.
+- `docs/ARCHITECTURE.md`: import data-flow note.
 
 ### Verification
 
@@ -61,9 +68,9 @@ Completed on 2026-08-11.
 
 ### Known limitations
 
-- Status still reports whatever is already on disk; claim allowlist is enforced on activate, not on every status read.
-- `payload.product` is not yet used as an additional reject rule.
+- No DB unique index on name; skip is ACTIVE-only.
+- Limit mid-import yields per-row errors rather than rolling back earlier creates in the batch (same transaction commits successful inserts).
 
 ### Remaining work
 
-- Optionally also require `payload.product` to match the assets_management product code.
+- Optional: unique name constraint / skip INACTIVE names as well.

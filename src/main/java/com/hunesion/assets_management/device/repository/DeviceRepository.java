@@ -32,6 +32,15 @@ public interface DeviceRepository {
             """)
     DeviceResponse findById(@Param("id") Long id);
 
+    @Select("""
+            SELECT id, name, ip_address, status, created_at, updated_at
+            FROM device
+            WHERE LOWER(name) = LOWER(#{name})
+              AND status = 'ACTIVE'
+            LIMIT 1
+            """)
+    DeviceResponse findActiveByNameIgnoreCase(@Param("name") String name);
+
     @Insert("""
             INSERT INTO device (name, ip_address, status)
             VALUES (#{name}, #{ipAddress}, #{status})

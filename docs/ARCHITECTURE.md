@@ -17,7 +17,7 @@ Asset management service: register and manage devices, and enforce an active Ed2
 
 | Package | Responsibility |
 | --- | --- |
-| `device` | Device CRUD and inventory |
+| `device` | Device CRUD, CSV-driven bulk import (create-or-skip), inventory |
 | `license` | `.lic` upload/activate/status; server fingerprint binding; device-only `devices_limit` claim allowlist |
 | `common` | API envelope, CORS, OpenAPI, exceptions |
 
@@ -43,7 +43,8 @@ libs/          hns-license-lib JAR
 4. Service computes a host-only server fingerprint, stores the `.lic` and a `fingerprint.meta` sidecar beside `license.storage.path`.
 5. Operators may generate offline LMS request files: TEMPORARY → `official-license-request.json` (`CONVERSION`); OFFICIAL (ACTIVE/EXPIRED) → `renewal-official-license-request.json` (`RENEWAL`).
 6. Status and device-create paths re-verify the file and recompute the fingerprint; mismatch yields `BINDING_INVALID`.
-7. Device create is blocked when license is missing, invalid, expired, or binding-invalid, or when device count reaches `devices_limit`.
+7. Device create and import are blocked when license is missing, invalid, expired, or binding-invalid, or when device count reaches `devices_limit`.
+8. `POST /api/v1/devices/import` create-or-skips by ACTIVE name (case-insensitive); each new insert reuses `assertCanCreateDevice()`. CSV parsing stays in `assets-management-ui`.
 
 ## Authentication and authorization
 

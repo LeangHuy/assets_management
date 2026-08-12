@@ -2,6 +2,8 @@ package com.hunesion.assets_management.device.controller;
 
 import com.hunesion.assets_management.common.dto.ApiResponse;
 import com.hunesion.assets_management.device.dto.DeviceCreateRequest;
+import com.hunesion.assets_management.device.dto.DeviceImportRequest;
+import com.hunesion.assets_management.device.dto.DeviceImportResult;
 import com.hunesion.assets_management.device.dto.DevicePatchRequest;
 import com.hunesion.assets_management.device.dto.DeviceResponse;
 import com.hunesion.assets_management.device.service.DeviceService;
@@ -54,6 +56,20 @@ public class DeviceController {
     public ResponseEntity<ApiResponse<DeviceResponse>> create(@Valid @RequestBody DeviceCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Device created successfully", deviceService.create(request)));
+    }
+
+    @PostMapping("/import")
+    @Operation(
+            summary = "Import devices",
+            description = "Bulk create-or-skip by device name. Skips rows that already have an ACTIVE device "
+                    + "with the same name (case-insensitive). Each new create is gated by the licensed "
+                    + "limits.devices_limit (Active + Recycle Bin both count). Duplicate names within the "
+                    + "same request return 409. Per-row license or validation failures are returned in errors."
+    )
+    public ResponseEntity<ApiResponse<DeviceImportResult>> importDevices(
+            @Valid @RequestBody DeviceImportRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Device import completed", deviceService.importDevices(request)));
     }
 
     @PatchMapping("/{deviceId}")

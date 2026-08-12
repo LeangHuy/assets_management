@@ -115,3 +115,17 @@
 - Rationale: Each product consumer only accepts licenses that match its claim contract.
 - Consequences: OTORAS-style licenses with extra claims cannot activate here. Issuer must issue assets_management licenses with only `devices_limit` and no features.
 - Date: 2026-08-11
+
+## ADR-012: Device import create-or-skip with license gate
+
+- Status: Accepted
+- Context: Operators need bulk device registration without bypassing `limits.devices_limit`. OTORAS equipment file integration uses create-or-skip by name.
+- Decision:
+  - Add `POST /api/v1/devices/import` with JSON rows `{ name, ipAddress? }`.
+  - Skip when an ACTIVE device already has the same name (case-insensitive).
+  - Reject duplicate names within the same request with 409.
+  - Call `assertCanCreateDevice()` before each new insert; put license/validation failures in per-row `errors`.
+  - Keep CSV parsing in the admin UI; API accepts validated rows only.
+- Rationale: Matches OTORAS import semantics and reuses the existing create license gate (ADR-002).
+- Consequences: Mid-batch limit hits leave earlier creates in place and report remaining rows as errors. INACTIVE same-name rows do not block import.
+- Date: 2026-08-12

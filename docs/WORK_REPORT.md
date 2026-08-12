@@ -1,5 +1,38 @@
 # Work Reports
 
+## 2026-08-12 (device import + license limit)
+
+### Today's Work
+
+- Added bulk device import that create-or-skips by active name.
+- Each new import row is gated by licensed `limits.devices_limit` (same rule as single create).
+- Documented the import contract as ADR-012.
+
+### Technical Changes
+
+- `DeviceController.java`: `POST /api/v1/devices/import`.
+- `DeviceServiceImpl.java`: create-or-skip import with `assertCanCreateDevice()` per insert.
+- `DeviceRepository.java`: `findActiveByNameIgnoreCase`.
+- `DeviceImport*.java`: request/result/error DTOs.
+- `docs/DECISIONS.md` / `docs/ARCHITECTURE.md`: ADR-012 and data-flow notes.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava --rerun-tasks`)
+
+### Known Issues
+
+- Mid-batch limit failures leave earlier successful creates committed.
+- Skip matches ACTIVE names only; INACTIVE same-name rows do not block import.
+
+### Next Work Plan
+
+- Optional unique name constraint / broader skip rules.
+- Manual import test against a license with a small `devices_limit`.
+
 ## 2026-08-11 (device-only claim allowlist)
 
 ### Today's Work
