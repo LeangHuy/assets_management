@@ -41,7 +41,9 @@ import java.util.stream.Collectors;
 public class LicenseServiceImpl implements LicenseService {
 
     private static final String LIMIT_DEVICES = "devices_limit";
+    private static final String FEATURE_IMPORT = "import_feature";
     private static final Set<String> ALLOWED_LIMIT_KEYS = Set.of(LIMIT_DEVICES);
+    private static final Set<String> ALLOWED_FEATURE_KEYS = Set.of(FEATURE_IMPORT);
 
     private final SignedLicenseVerifier signedLicenseVerifier;
     private final LicensePayloadValidator payloadValidator;
@@ -80,6 +82,18 @@ public class LicenseServiceImpl implements LicenseService {
                     "Device limit reached (" + devicesLimit
                             + "). Active and Recycle Bin devices both count toward the license. "
                             + "Cannot register more devices");
+        }
+    }
+
+    @Override
+    public void assertCanImportDevices() {
+        ResolvedLicense resolved = resolveLicense();
+        requireActiveBoundLicense(resolved);
+
+        SignedLicenseVerifier.VerifiedLicense verified = resolved.verified();
+        if (verified == null || !verified.payload().hasFeature("IMPORT_FEATURE")) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License does not include features.import_feature. Device import is not licensed");
         }
     }
 
@@ -186,8 +200,8 @@ public class LicenseServiceImpl implements LicenseService {
     }
 
     /**
-     * Asset management accepts only {@code limits.devices_limit} and empty {@code features}.
-     * Licenses with OTORAS claims (e.g. {@code database_limit}, {@code i_service}) are rejected.
+     * Asset management accepts only {@code limits.devices_limit} and {@code features.import_feature}.
+     * Licenses with foreign-product claims (e.g. {@code database_limit}, {@code i_service}) are rejected.
      */
     private void requireAssetManagementClaims(LicensePayload payload) {
         Map<String, Integer> limits = payload.limits();
@@ -206,10 +220,18 @@ public class LicenseServiceImpl implements LicenseService {
         }
 
         Map<String, Boolean> features = payload.features();
-        if (features != null && !features.isEmpty()) {
+        if (features == null || !features.containsKey(FEATURE_IMPORT)) {
             throw new LicenseException(HttpStatus.BAD_REQUEST,
-                    "License features must be empty for asset management. Unexpected: "
-                            + new TreeSet<>(features.keySet()));
+                    "features.import_feature is required for asset management");
+        }
+
+        Set<String> unexpectedFeatures = features.keySet().stream()
+                .filter(key -> !ALLOWED_FEATURE_KEYS.contains(key))
+                .collect(Collectors.toCollection(TreeSet::new));
+        if (!unexpectedFeatures.isEmpty()) {
+            throw new LicenseException(HttpStatus.BAD_REQUEST,
+                    "License features are not valid for asset management. Allowed: "
+                            + ALLOWED_FEATURE_KEYS + "; unexpected: " + unexpectedFeatures);
         }
     }
 

@@ -1,5 +1,35 @@
 # Work Reports
 
+## 2026-08-12 (IMPORT_FEATURE + DEVICES_LIMIT claim alignment)
+
+### Today's Work
+
+- Updated license activation to accept `limits.devices_limit` and `features.import_feature` only.
+- Added `assertCanImportDevices()` so bulk import requires `features.import_feature = true`.
+- Wired device import to call the new import feature gate before processing rows.
+
+### Technical Changes
+
+- `LicenseServiceImpl.java`: claim allowlist + `assertCanImportDevices()`.
+- `LicenseService.java`: new assert API.
+- `DeviceServiceImpl.java`: import calls `assertCanImportDevices()` first.
+- `docs/DECISIONS.md`: ADR-013; ADR-011 superseded.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Passed (`./gradlew compileJava --rerun-tasks`)
+
+### Known Issues
+
+- UI still shows Import when `import_feature` is false (API returns 403).
+
+### Next Work Plan
+
+- Optionally hide Import in `assets-management-ui` based on license `features`.
+
 ## 2026-08-12 (device import + license limit)
 
 ### Today's Work

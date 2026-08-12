@@ -6,46 +6,36 @@ Completed
 
 ## Objective
 
-Add bulk device import (`POST /api/v1/devices/import`) that create-or-skips by active name and enforces licensed `limits.devices_limit` on each new create.
+Align assets_management license activation and enforcement with product claims `DEVICES_LIMIT` and `IMPORT_FEATURE` (`limits.devices_limit`, `features.import_feature`).
 
 ## Context
 
-Single-device create already called `assertCanCreateDevice()`. Operators need CSV-driven bulk registration without bypassing the device cap. Import mirrors OTORAS equipment file-integration semantics (create-or-skip).
+ADR-011 required empty `features`, but the issuer now issues `IMPORT_FEATURE` for assets_management. Device import must be gated by `features.import_feature = true`; device create remains gated by `limits.devices_limit`.
 
 ## Requirements
 
-1. Accept a JSON body `{ "devices": [ { "name", "ipAddress?" } ] }`.
-2. Reject duplicate names within the same request (409).
-3. Skip rows that already have an ACTIVE device with the same name (case-insensitive).
-4. Call `assertCanCreateDevice()` before each new insert; report per-row failures in `errors`.
-5. Return `{ created, createdCount, skippedCount, errors }`.
+1. On activate, require `limits.devices_limit` and a present `features.import_feature` key.
+2. Reject activate when `limits` or `features` contain any key outside the allowlist.
+3. Add `assertCanImportDevices()` using `payload.hasFeature("IMPORT_FEATURE")`.
+4. Call `assertCanImportDevices()` at the start of device import.
+5. Keep `assertCanCreateDevice()` for single create and per-row import inserts.
 
 ## Out of scope
 
-- Multipart CSV upload on the API (UI parses CSV client-side).
-- Unique DB constraint on device name.
-- Hard-failing the whole import when the license limit is reached mid-batch.
+- UI changes to hide Import when `import_feature` is false (backend enforcement only).
 
 ## Acceptance criteria
 
-- Import creates new ACTIVE devices under the license limit.
-- Existing active names are skipped, not overwritten.
-- When the limit is reached, further rows appear in `errors` with the limit message.
-- Duplicate names in one request return 409.
+- License with `devices_limit` + `import_feature: true` activates; import allowed.
+- License with `import_feature: false` activates; import returns 403.
+- License missing `import_feature` or with extra claims is rejected on activate.
 - `./gradlew compileJava` succeeds.
 
 ## Relevant files
 
-- `device/controller/DeviceController.java`
+- `license/service/LicenseService.java`, `license/service/serviceImpl/LicenseServiceImpl.java`
 - `device/service/DeviceServiceImpl.java`
-- `device/dto/DeviceImport*.java`
-- `device/repository/DeviceRepository.java`
-- `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`
-
-## Risks and constraints
-
-- Recycle Bin devices already count toward the limit (ADR-002); import cannot create more until space frees or the license increases.
-- INACTIVE devices with the same name do not block import (same as OTORAS active-only skip).
+- `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`, `AGENTS.md`
 
 ## Implementation result
 
@@ -55,12 +45,11 @@ Completed on 2026-08-12.
 
 ### Files changed
 
-- `DeviceImportRequest.java`, `DeviceImportRow.java`, `DeviceImportResult.java`, `DeviceImportErrorItem.java`: import DTOs.
-- `DeviceRepository.java`: `findActiveByNameIgnoreCase`.
-- `DeviceService.java` / `DeviceServiceImpl.java`: `importDevices` create-or-skip + license gate.
-- `DeviceController.java`: `POST /api/v1/devices/import`.
-- `docs/DECISIONS.md`: ADR-012.
-- `docs/ARCHITECTURE.md`: import data-flow note.
+- `LicenseServiceImpl.java`: allowlist `import_feature`; `assertCanImportDevices()`.
+- `LicenseService.java`: new assert API.
+- `DeviceServiceImpl.java`: import calls `assertCanImportDevices()` first.
+- `DeviceController.java`: OpenAPI note for import feature.
+- `docs/DECISIONS.md`: ADR-013; ADR-011 superseded.
 
 ### Verification
 
@@ -68,9 +57,8 @@ Completed on 2026-08-12.
 
 ### Known limitations
 
-- No DB unique index on name; skip is ACTIVE-only.
-- Limit mid-import yields per-row errors rather than rolling back earlier creates in the batch (same transaction commits successful inserts).
+- UI still shows Import even when `import_feature` is false (API returns 403).
 
 ### Remaining work
 
-- Optional: unique name constraint / skip INACTIVE names as well.
+- Optionally hide Import in `assets-management-ui` from license status `features`.

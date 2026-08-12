@@ -61,7 +61,8 @@ public class DeviceController {
     @PostMapping("/import")
     @Operation(
             summary = "Import devices",
-            description = "Bulk create-or-skip by device name. Skips rows that already have an ACTIVE device "
+            description = "Bulk create-or-skip by device name. Requires features.import_feature on the license. "
+                    + "Skips rows that already have an ACTIVE device "
                     + "with the same name (case-insensitive). Each new create is gated by the licensed "
                     + "limits.devices_limit (Active + Recycle Bin both count). Duplicate names within the "
                     + "same request return 409. Per-row license or validation failures are returned in errors."

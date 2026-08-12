@@ -52,6 +52,8 @@ public class DeviceServiceImpl implements DeviceService {
     @Override
     @Transactional
     public DeviceImportResult importDevices(DeviceImportRequest request) {
+        licenseService.assertCanImportDevices();
+
         List<DeviceImportRow> rows = request.devices();
         rejectDuplicateNamesInRequest(rows);
 

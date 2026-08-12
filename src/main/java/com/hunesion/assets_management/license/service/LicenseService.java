@@ -12,6 +12,12 @@ public interface LicenseService {
     void assertCanCreateDevice();
 
     /**
+     * Ensures the active license includes {@code features.import_feature = true}
+     * before bulk device import.
+     */
+    void assertCanImportDevices();
+
+    /**
      * Builds an offline license-request JSON from the active bound TEMPORARY (CONVERSION)
      * or OFFICIAL (RENEWAL) license and returns the file bytes plus download filename.
      */

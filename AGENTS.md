@@ -31,7 +31,7 @@ Before implementing:
 - Do not commit secrets, private keys, or real `.env` credentials.
 - Prefer additive SQL migrations under `src/main/resources/schema/`.
 - Hold the Ed25519 **public key only**; never ship or log the issuer private key.
-- Product-specific claim enforcement: assets_management accepts only `limits.devices_limit` with empty `features` (reject foreign product claims). Enforcement stays in this service, not in `hns-license-lib`.
+- Product-specific claim enforcement: assets_management accepts only `limits.devices_limit` and `features.import_feature` (reject foreign product claims). Device import requires `features.import_feature = true`. Enforcement stays in this service, not in `hns-license-lib`.
 
 ## Verification commands
 

@@ -105,7 +105,7 @@
 
 ## ADR-011: Device-only claim allowlist for assets_management
 
-- Status: Accepted
+- Status: Superseded by ADR-013
 - Context: A single signed `.lic` may carry OTORAS claims (`database_limit`, `features.i_service`) that assets_management does not use. Activating a foreign product license would incorrectly authorize this service.
 - Decision:
   - On activate, require exactly `limits.devices_limit` (no other limit keys).
@@ -118,7 +118,7 @@
 
 ## ADR-012: Device import create-or-skip with license gate
 
-- Status: Accepted
+- Status: Accepted (extended by ADR-013)
 - Context: Operators need bulk device registration without bypassing `limits.devices_limit`. OTORAS equipment file integration uses create-or-skip by name.
 - Decision:
   - Add `POST /api/v1/devices/import` with JSON rows `{ name, ipAddress? }`.
@@ -128,4 +128,19 @@
   - Keep CSV parsing in the admin UI; API accepts validated rows only.
 - Rationale: Matches OTORAS import semantics and reuses the existing create license gate (ADR-002).
 - Consequences: Mid-batch limit hits leave earlier creates in place and report remaining rows as errors. INACTIVE same-name rows do not block import.
+- Date: 2026-08-12
+- Updated: 2026-08-12 — import also requires `features.import_feature = true` (ADR-013).
+
+## ADR-013: Allow `import_feature` in assets_management claim allowlist
+
+- Status: Accepted
+- Context: Product schema now defines `DEVICES_LIMIT` (NUMBER) and `IMPORT_FEATURE` (BOOLEAN), projected to `limits.devices_limit` and `features.import_feature`. ADR-011 rejected all features, which blocks legitimate assets_management licenses.
+- Decision:
+  - On activate, require exactly `limits.devices_limit` and a present `features.import_feature` key (true or false).
+  - Reject any other limit or feature keys.
+  - Expose `features` on license status (already on `LicenseInfoResponse`).
+  - Add `assertCanImportDevices()`; device import calls it before processing rows. Import is allowed only when `features.import_feature` is `true`.
+  - Keep `assertCanCreateDevice()` for single create and per-row import inserts.
+- Rationale: Aligns with issuer claim schema (`IMPORT_FEATURE` / `DEVICES_LIMIT`) and shared runtime `hasFeature()` contract.
+- Consequences: Licenses without `import_feature` cannot activate. Licenses with `import_feature: false` activate but cannot import. OTORAS-style extra claims still rejected.
 - Date: 2026-08-12
