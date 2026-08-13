@@ -45,8 +45,9 @@
 - Context: Operators need a single way to run UI, backend, and MariaDB behind HTTPS on a fixed host port, often by server IP.
 - Decision: Keep app Dockerfiles in each repo, and put the full ops stack in sibling folder `assets-management-docker/` (`docker-compose.yml`, nginx, MariaDB init, env template, certs). nginx listens on container 443, published as host **9005**. UI is built with empty `NEXT_PUBLIC_API_BASE_URL` so the browser calls same-origin `/api/...` through nginx. TLS uses self-signed certs auto-generated for `PUBLIC_HOST` (replaceable with CA certs under `certs/`).
 - Rationale: One deploy folder matches ops expectations; reverse-proxy avoids exposing backend/UI ports and keeps CORS/TLS at the edge; source repos stay free of compose/certs clutter.
-- Consequences: Operators must set `PUBLIC_HOST` / `CORS_ALLOWED_ORIGINS` to the IP or hostname clients use; browsers warn on self-signed certs until a trusted cert is installed; sibling checkouts of `assets_management` and `assets-management-ui` are required next to `assets-management-docker`.
+- Consequences: Operators must set `PUBLIC_HOST` / `CORS_ALLOWED_ORIGINS` to the IP or hostname clients use; browsers warn on self-signed certs until a trusted cert is installed; sibling checkouts of `assets_management` and `assets-management-ui` are required next to `assets-management-docker`. Local-dev Compose in the app repos is documented in ADR-014 and does not replace this ops stack.
 - Date: 2026-07-30
+- Updated: 2026-08-13 — local-dev Compose added in-repo (ADR-014); this ADR remains the HTTPS ops stack.
 
 ## ADR-006: Enforce issuer-embedded serverFingerprint for OFFICIAL
 
@@ -144,3 +145,12 @@
 - Rationale: Aligns with issuer claim schema (`IMPORT_FEATURE` / `DEVICES_LIMIT`) and shared runtime `hasFeature()` contract.
 - Consequences: Licenses without `import_feature` cannot activate. Licenses with `import_feature: false` activate but cannot import. OTORAS-style extra claims still rejected.
 - Date: 2026-08-12
+
+## ADR-014: In-repo local-dev Compose (OTORAS-Backend style)
+
+- Status: Accepted
+- Context: Operators wanted `docker-compose.yml` in the application repo, matching `OTORAS-Backend/docker-compose.yml`, instead of only the sibling `assets-management-docker/` ops folder.
+- Decision: Keep a local-dev Compose file at this repo root with MariaDB (named volume, healthcheck, host port 3308) and the backend built from the existing `Dockerfile` (host port 8082). Persist license files on a named volume. Document env in `.env.example`. Leave the nginx HTTPS stack (port 9005) in `assets-management-docker/` (ADR-005).
+- Rationale: Same developer workflow as OTORAS (compose next to the app). The ops folder still covers IP-based HTTPS and image transfer.
+- Consequences: Two Compose entry points exist. Host port 3308 may collide with OTORAS MariaDB; override `ASSETS_DB_PORT`. `LICENSE_SIGNING_PUBLIC_KEY` must be supplied in `.env`.
+- Date: 2026-08-13

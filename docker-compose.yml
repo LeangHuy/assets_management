@@ -1,0 +1,69 @@
+
+name: assets-management-local
+
+services:
+  db:
+    image: mariadb:${ASSETS_MARIADB_IMAGE_VERSION:-11.8}
+    container_name: assets-mgmt-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-assets_db}
+      MYSQL_USER: ${MYSQL_USER:-assets}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-asd@ASD123}
+    ports:
+      - "${ASSETS_DB_PORT:-3309}:3306"
+    volumes:
+      # Docker named volume (recommended on Windows — avoids bind-mount / case-sensitivity init issues)
+      - assets_mariadb_data:/var/lib/mysql
+      - ./src/main/resources/schema/shcema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - assets-network
+
+  # Assets management backend (Spring Boot app)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: assets-management-backend:local
+    container_name: assets-mgmt-backend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8083}:8082"
+    environment:
+      DB_URL: jdbc:mariadb://db:3306/${MYSQL_DATABASE:-assets_db}
+      DB_USERNAME: ${DB_USERNAME:-assets}
+      DB_PASSWORD: ${DB_PASSWORD:-asd@ASD123}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:3005,http://127.0.0.1:3000}
+      LICENSE_SIGNING_PUBLIC_KEY: ${LICENSE_SIGNING_PUBLIC_KEY:-MCowBQYDK2VwAyEAz5W3nJB86b9QWzOpZ2FjuFeE4un8fZgloEh6k6fuIjY=}
+      LICENSE_STORAGE_PATH: data/license/active.lic
+    volumes:
+      # Required on Linux Docker: host machine-id for stable license fingerprints.
+      # Without these, os_machine_id is empty and BINDING_INVALID is common after recreate.
+      # Uncomment on Linux hosts:
+      - /etc/machine-id:/etc/machine-id:ro
+      - /var/lib/dbus/machine-id:/var/lib/dbus/machine-id:ro
+      # Persist active.lic + fingerprint.meta (named volume is reliable on Windows)
+      - assets_license_data:/app/data/license
+    depends_on:
+      db:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - assets-network
+
+volumes:
+  assets_mariadb_data:
+    driver: local
+  assets_license_data:
+    driver: local
+
+networks:
+  assets-network:
+    driver: bridge

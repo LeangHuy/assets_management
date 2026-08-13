@@ -1,5 +1,39 @@
 # Work Reports
 
+## 2026-08-13 (local-dev Docker Compose)
+
+### Today's Work
+
+- Added an OTORAS-Backend-style `docker-compose.yml` at the repo root for local MariaDB and backend runs.
+- Documented Compose environment variables in `.env.example` without real secrets.
+- Recorded that the HTTPS ops stack in `assets-management-docker/` remains in place (ADR-014).
+
+### Technical Changes
+
+- `docker-compose.yml`: MariaDB 11.8 with named volume and healthcheck; backend built from the existing Dockerfile on port 8082.
+- `.env.example`: Database, CORS, and license public-key placeholders.
+- `.gitignore` / `.dockerignore`: Ignore `.env`.
+- `docs/DECISIONS.md`: ADR-014 for in-repo local Compose.
+- `docs/ARCHITECTURE.md`: Local Compose plus existing ops folder.
+
+### Verification
+
+- Type check: Not run
+- Lint: Not run
+- Tests: Not run
+- Build: Not run
+- Compose config: Passed (`docker compose config --quiet`)
+
+### Known Issues
+
+- `LICENSE_SIGNING_PUBLIC_KEY` must be set in `.env` before license activate/status works.
+- First-boot schema comes from `shcema.sql`; later SQL migrations are not applied automatically.
+- Host port 3308 may conflict with OTORAS MariaDB.
+
+### Next Work Plan
+
+- Operators copy `.env.example` to `.env`, set the license public key, and run `docker compose up -d --build`.
+
 ## 2026-08-12 (IMPORT_FEATURE + DEVICES_LIMIT claim alignment)
 
 ### Today's Work

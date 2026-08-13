@@ -63,10 +63,11 @@ libs/          hns-license-lib JAR
 
 - Runnable Spring Boot JAR (`./gradlew bootRun` / packaged jar).
 - Default server port: `8082`.
-- Persist `license.storage.path` (and its `fingerprint.meta` sidecar) on a host-mounted volume so container recreation keeps local TEMPORARY binding cache.
-- Full Docker stack lives in sibling folder `assets-management-docker/` (MariaDB + backend + UI + nginx).
-- Public entry: HTTPS on host port **9005** (`https://<PUBLIC_HOST>:9005`); nginx terminates TLS and proxies `/` → UI, `/api/` → backend.
-- App `Dockerfile` remains in this repo for image builds; compose and ops config are in `assets-management-docker`.
+- Persist `license.storage.path` (and its `fingerprint.meta` sidecar) on a Docker named volume (or host bind) so container recreation keeps local TEMPORARY binding cache.
+- Local Docker: `docker-compose.yml` in this repo (MariaDB + backend), OTORAS-Backend style. Copy `.env.example` → `.env`.
+- Full HTTPS ops stack remains in sibling folder `assets-management-docker/` (MariaDB + backend + UI + nginx).
+- Public ops entry: HTTPS on host port **9005** (`https://<PUBLIC_HOST>:9005`); nginx terminates TLS and proxies `/` → UI, `/api/` → backend.
+- App `Dockerfile` in this repo is used by both local Compose and `assets-management-docker`.
 
 ## Important technical constraints
 
