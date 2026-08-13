@@ -19,6 +19,7 @@ import com.hunesion.license.runtime.storage.LicenseFileStore;
 import com.hunesion.license.runtime.support.LicenseFileReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -100,43 +101,10 @@ public class LicenseServiceImpl implements LicenseService {
     @Override
     public LicenseRequestFile generateOfficialLicenseRequest() {
         ResolvedLicense resolved = resolveLicense();
-        LicenseInfoResponse info = resolved.toResponse();
-
-        if (!info.present() || resolved.verified() == null) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "No active license. Activate a .lic file before generating a license request");
-        }
-        if (LicenseRuntimeStatus.INVALID.equals(info.status())) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "License file is invalid or has been tampered with");
-        }
-        if (LicenseRuntimeStatus.BINDING_INVALID.equals(info.status()) || !info.serverBound()) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "License binding is invalid for this server. Re-activate the .lic file before generating a request");
-        }
+        LicenseInfoResponse info = getLicenseInfoResponse(resolved);
 
         LicensePayload payload = resolved.verified().payload();
-        String licenseType = payload.licenseType() == null ? "" : payload.licenseType().trim().toUpperCase();
-        String requestType;
-        if ("TEMPORARY".equals(licenseType)) {
-            if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
-                throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
-            }
-            if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
-                throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
-            }
-            requestType = OfficialLicenseRequest.REQUEST_TYPE_CONVERSION;
-        } else if ("OFFICIAL".equals(licenseType)) {
-            if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())
-                    && !LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
-                throw new ApiException(HttpStatus.FORBIDDEN,
-                        "Official license must be ACTIVE or EXPIRED to generate a renewal request");
-            }
-            requestType = OfficialLicenseRequest.REQUEST_TYPE_RENEWAL;
-        } else {
-            throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "License request can only be generated from TEMPORARY or OFFICIAL licenses");
-        }
+        String requestType = getRequestType(payload, info);
 
         FingerprintMeta binding = licenseBindingStore.read()
                 .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN,
@@ -161,6 +129,49 @@ public class LicenseServiceImpl implements LicenseService {
 
         byte[] content = officialLicenseRequestStore.write(request);
         return new LicenseRequestFile(content, OfficialLicenseRequestStore.fileNameFor(request));
+    }
+
+    private static @NonNull LicenseInfoResponse getLicenseInfoResponse(ResolvedLicense resolved) {
+        LicenseInfoResponse info = resolved.toResponse();
+
+        if (!info.present() || resolved.verified() == null) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "No active license. Activate a .lic file before generating a license request");
+        }
+        if (LicenseRuntimeStatus.INVALID.equals(info.status())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License file is invalid or has been tampered with");
+        }
+        if (LicenseRuntimeStatus.BINDING_INVALID.equals(info.status()) || !info.serverBound()) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "License binding is invalid for this server. Re-activate the .lic file before generating a request");
+        }
+        return info;
+    }
+
+    private static @NonNull String getRequestType(LicensePayload payload, LicenseInfoResponse info) {
+        String licenseType = payload.licenseType() == null ? "" : payload.licenseType().trim().toUpperCase();
+        String requestType;
+        if ("TEMPORARY".equals(licenseType)) {
+            if (LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "License has expired");
+            }
+            if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "License is not active");
+            }
+            requestType = OfficialLicenseRequest.REQUEST_TYPE_CONVERSION;
+        } else if ("OFFICIAL".equals(licenseType)) {
+            if (!LicenseRuntimeStatus.ACTIVE.equals(info.status())
+                    && !LicenseRuntimeStatus.EXPIRED.equals(info.status())) {
+                throw new ApiException(HttpStatus.FORBIDDEN,
+                        "Official license must be ACTIVE or EXPIRED to generate a renewal request");
+            }
+            requestType = OfficialLicenseRequest.REQUEST_TYPE_RENEWAL;
+        } else {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "License request can only be generated from TEMPORARY or OFFICIAL licenses");
+        }
+        return requestType;
     }
 
     private LicenseInfoResponse activateLicenseKey(String licenseKey) {
